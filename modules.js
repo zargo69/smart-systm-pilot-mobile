@@ -13,7 +13,7 @@ const starterPricebook = [
 const localModulesDefault = {
   appointments: [], suppliers: [], purchases: [], invoices: [], payments: [],
   expenses: [], documents: [], reports: [], auditLogs: [], prospects: [], followups: [], pricebook: starterPricebook,
-  settings: { appName: 'Smart syst’m Pilot', companyName: 'Mon entreprise', country: 'FR', currency: 'EUR' }
+  settings: { appName: 'Smart syst’m Pilot', companyName: 'Mon entreprise', country: 'FR', currency: 'EUR', addressSearchEndpoint: 'https://nominatim.openstreetmap.org/search' }
 };
 data = { ...localModulesDefault, ...data, settings: { ...localModulesDefault.settings, ...(data.settings || {}) } };
 delete data.settings.googleMapsApiKey;
@@ -124,7 +124,8 @@ async function searchFreeAddress(input) {
   const results = input.parentElement.querySelector('.address-search-results');
   const button = input.parentElement.querySelector('[data-address-search]');
   let cache = {}; try { cache = JSON.parse(localStorage.getItem('ssp-address-search-cache-v1') || '{}'); } catch { cache = {}; }
-  const cacheKey = `${data.settings.country}:${query.toLocaleLowerCase('fr').replace(/\s+/g, ' ')}`;
+  const endpoint = String(data.settings.addressSearchEndpoint || 'https://nominatim.openstreetmap.org/search').trim();
+  const cacheKey = `${endpoint}:${data.settings.country}:${query.toLocaleLowerCase('fr').replace(/\s+/g, ' ')}`;
   const cached = Array.isArray(cache[cacheKey]) ? cache[cacheKey] : null;
   const now = Date.now();
   if (!cached && now - lastAddressLookupAt < 1100) return notify('Patientez un instant avant une nouvelle recherche d’adresse.');
@@ -134,7 +135,7 @@ async function searchFreeAddress(input) {
     let matches = cached;
     if (!matches) {
       const country = data.settings.country === 'CH' ? 'ch' : 'fr';
-      const url = new URL('https://nominatim.openstreetmap.org/search');
+      const url = new URL(endpoint);
       url.search = new URLSearchParams({ format: 'jsonv2', addressdetails: '1', limit: '5', countrycodes: country, q: query });
       const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 12000);
       let response; try { response = await fetch(url, { headers: { 'Accept-Language': 'fr' }, signal: controller.signal }); } finally { clearTimeout(timeout); }
@@ -569,7 +570,7 @@ setInterval(() => { if (document.visibilityState === 'visible') dispatchDueBrows
 
 function settingsPage() {
   let priorRestore = null; try { priorRestore = localStorage.getItem('ssp-pre-restore-backup-v1'); } catch { /* Le stockage local peut être indisponible. */ }
-  return `${heading('VOTRE ESPACE', 'Paramètres', 'Personnalisez les informations locales de l’entreprise.')} ${localNotice}<section class="panel settings-form"><form data-module-form="settings"><label>Nom de l’application<input name="appName" required maxlength="80" value="${esc(data.settings.appName)}"></label><label>Nom de l’entreprise<input name="companyName" required maxlength="120" value="${esc(data.settings.companyName)}"></label><div class="form-row"><label>Pays de référence<select name="country"><option value="FR" ${data.settings.country === 'FR' ? 'selected' : ''}>France</option><option value="CH" ${data.settings.country === 'CH' ? 'selected' : ''}>Suisse</option></select></label><label>Devise par défaut<select name="currency"><option value="EUR" ${data.settings.currency === 'EUR' ? 'selected' : ''}>EUR · Euro</option><option value="CHF" ${data.settings.currency === 'CHF' ? 'selected' : ''}>CHF · Franc suisse</option></select></label></div><p class="form-hint">La carte et la recherche d’adresse utilisent OpenStreetMap sans clé API ni abonnement. La recherche n’est envoyée qu’après votre clic ; l’affichage de la carte transmet au fournisseur la zone visible. Ces services gratuits sont soumis à des limites d’usage et à leur disponibilité.</p><p class="form-hint">Les règles fiscales ne sont pas calculées automatiquement par ce réglage.</p><button class="btn primary">Enregistrer</button></form></section><section class="panel"><div class="panel-head"><div><h2>Copie de sauvegarde locale</h2><p>Exportez puis restaurez une copie JSON de ce navigateur.</p></div><button class="btn secondary" data-module-action="export">Exporter mes données</button></div><label class="import-label">Restaurer une copie<input id="import-file" type="file" accept="application/json,.json"></label><p class="form-hint">Avant de remplacer les données, l’application conserve automatiquement une copie locale de l’état actuel. Téléchargez-la ci-dessous si vous voulez garder un fichier externe.</p>${priorRestore ? '<button class="btn secondary" data-module-action="export-restore-backup">Télécharger la copie précédant la restauration</button>' : ''}<p class="form-hint">Le fichier peut contenir des coordonnées personnelles ; conservez-le dans un endroit sûr.</p><button class="btn danger" data-module-action="clear">Effacer les données locales</button></section>`;
+  return `${heading('VOTRE ESPACE', 'Paramètres', 'Personnalisez les informations locales de l’entreprise.')} ${localNotice}<section class="panel settings-form"><form data-module-form="settings"><label>Nom de l’application<input name="appName" required maxlength="80" value="${esc(data.settings.appName)}"></label><label>Nom de l’entreprise<input name="companyName" required maxlength="120" value="${esc(data.settings.companyName)}"></label><div class="form-row"><label>Pays de référence<select name="country"><option value="FR" ${data.settings.country === 'FR' ? 'selected' : ''}>France</option><option value="CH" ${data.settings.country === 'CH' ? 'selected' : ''}>Suisse</option></select></label><label>Devise par défaut<select name="currency"><option value="EUR" ${data.settings.currency === 'EUR' ? 'selected' : ''}>EUR · Euro</option><option value="CHF" ${data.settings.currency === 'CHF' ? 'selected' : ''}>CHF · Franc suisse</option></select></label></div><p class="form-hint">La carte et la recherche d’adresse utilisent OpenStreetMap sans clé API ni abonnement. La recherche n’est envoyée qu’après votre clic ; l’affichage de la carte transmet au fournisseur la zone visible. Ces services gratuits sont soumis à des limites d’usage et à leur disponibilité.</p><details class="address-provider-settings"><summary>Réglage avancé du service de recherche d’adresse</summary><label>Adresse du service compatible Nominatim<input name="addressSearchEndpoint" type="url" required maxlength="300" value="${esc(data.settings.addressSearchEndpoint || 'https://nominatim.openstreetmap.org/search')}" autocomplete="url"></label><p class="form-hint">Laissez la valeur par défaut pour OpenStreetMap. Ce réglage permet de changer de fournisseur compatible sans modifier l’application. Vérifiez les règles de confidentialité et d’utilisation du service choisi.</p></details><p class="form-hint">Les règles fiscales ne sont pas calculées automatiquement par ce réglage.</p><button class="btn primary">Enregistrer</button></form></section><section class="panel"><div class="panel-head"><div><h2>Copie de sauvegarde locale</h2><p>Exportez puis restaurez une copie JSON de ce navigateur.</p></div><button class="btn secondary" data-module-action="export">Exporter mes données</button></div><label class="import-label">Restaurer une copie<input id="import-file" type="file" accept="application/json,.json"></label><p class="form-hint">Avant de remplacer les données, l’application conserve automatiquement une copie locale de l’état actuel. Téléchargez-la ci-dessous si vous voulez garder un fichier externe.</p>${priorRestore ? '<button class="btn secondary" data-module-action="export-restore-backup">Télécharger la copie précédant la restauration</button>' : ''}<p class="form-hint">Le fichier peut contenir des coordonnées personnelles ; conservez-le dans un endroit sûr.</p><button class="btn danger" data-module-action="clear">Effacer les données locales</button></section>`;
 }
 
 function moduleForm(type, title, content) {
@@ -725,7 +726,11 @@ function storeModuleForm(form, fileData = null) {
   const type = form.dataset.moduleForm;
   const values = Object.fromEntries(new FormData(form));
   if (type === 'settings') {
+    let addressSearchEndpoint;
+    try { const endpoint = new URL(String(values.addressSearchEndpoint || '').trim()); if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password) throw new Error('url'); addressSearchEndpoint = endpoint.href; }
+    catch { return notify('L’adresse du service d’adresses doit être une URL HTTPS valide.'); }
     data.settings = { ...data.settings, appName: values.appName.trim(), companyName: values.companyName.trim(), country: values.country, currency: values.currency };
+    data.settings.addressSearchEndpoint = addressSearchEndpoint;
     applyBrandSettings();
   }
   if (type === 'supplier') {
