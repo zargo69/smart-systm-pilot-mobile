@@ -79,8 +79,24 @@
   body:has(#quote-print-document) #quote-print-document * { visibility: visible !important; }
   body:has(#quote-print-document) #quote-print-document { position: absolute; inset: 0 auto auto 0; width: 100%; }
   body:has(#quote-print-document) .print-help,
-  body:has(#quote-print-document) .print-controls { display: none !important; }
+  body:has(#quote-print-document) .print-controls,
+  body:has(#invoice-print-document) .print-help,
+  body:has(#invoice-print-document) .print-controls { display: none !important; }
+  body:has(#invoice-print-document) * { visibility: hidden !important; }
+  body:has(#invoice-print-document) #invoice-print-document,
+  body:has(#invoice-print-document) #invoice-print-document * { visibility: visible !important; }
+  body:has(#invoice-print-document) #invoice-print-document { position: absolute; inset: 0 auto auto 0; width: 100%; }
   .quote-print-document .draft { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+
+.invoice-list-row { grid-template-columns: 27px minmax(0,1fr) auto auto; gap: 10px; }
+.invoice-row-actions { display: flex; gap: 6px; }
+.invoice-row-actions .btn { height: 31px; padding: 0 10px; }
+@media(max-width:780px) {
+  .invoice-list-row { grid-template-columns: 24px minmax(0,1fr) auto; gap: 7px; padding: 8px 0; }
+  .invoice-list-row > strong { grid-column: 2; grid-row: 2; text-align: left; font-size: 10px; }
+  .invoice-row-actions { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; }
+  .invoice-row-actions .btn { height: 29px; }
 }
 
 .quote-editor-heading,
