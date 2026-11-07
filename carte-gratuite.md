@@ -1,17 +1,24 @@
 # Carte et recherche d’adresses gratuites
 
-Smart syst’m Pilot utilise MapLibre GL JS pour afficher le plan de rue public d’OpenFreeMap et l’imagerie satellite EOxCloudless Sentinel‑2 de 2016, et Nominatim pour chercher une adresse. Aucun compte, clé API ou paiement n’est demandé. OpenFreeMap annonce un usage commercial autorisé et une instance publique sans limite publiée, mais le service est fourni sans garantie de disponibilité ; ses conditions peuvent changer.
+Smart syst’m Pilot utilise MapLibre GL JS. Le plan de rue repose sur OpenFreeMap et les données OpenStreetMap. En France, la seconde couche propose les orthophotographies IGN BD ORTHO via la Géoplateforme, sans compte ni clé API. Les images aériennes sont à haute résolution (généralement 20 cm) ; leur date de prise de vue et leur couverture varient selon le territoire. Ce sont des photographies aériennes, pas une imagerie satellite récente. La BD ORTHO est diffusée sous Licence Ouverte Etalab 2.0 pour tous usages, y compris professionnels. La Géoplateforme documente l’URL WMTS publique.
 
-## Utiliser la recherche
+Les services publics ne garantissent pas une disponibilité continue. L’application ne télécharge pas les fonds hors connexion.
 
-Dans une fiche client ou chantier, saisissez une adresse suffisamment précise, puis cliquez sur **Rechercher l’adresse**. Choisissez l’un des résultats pour remplir l’adresse, la ville, le code postal si disponible et les coordonnées GPS. Enregistrez la fiche pour garder les informations dans le stockage local du navigateur.
+## Rechercher une adresse
 
-La recherche est déclenchée par une action explicite : l’autocomplétion à chaque frappe n’est pas autorisée par le service public Nominatim. Les résultats sélectionnés sont mis en cache localement. Les demandes envoyées par cette application doivent rester très modérées et ne jamais dépasser une requête par seconde pour l’ensemble du site. Une recherche envoie le texte de l’adresse au service configuré. Dans **Paramètres → Réglage avancé du service de recherche d’adresse**, l’adresse HTTPS du fournisseur peut être remplacée par celle d’un service compatible Nominatim, sans modifier le code.
+Dans une fiche client ou chantier, saisissez une adresse suffisamment précise, puis cliquez sur **Rechercher l’adresse**. Choisissez un résultat pour compléter l’adresse et les coordonnées GPS. La recherche n’est pas envoyée à chaque frappe : Nominatim impose une utilisation modérée et une limite d’une requête par seconde pour l’application. Les résultats sélectionnés sont mis en cache localement.
 
-## Utiliser la carte
+## Afficher la carte
 
-Dans **Carte**, choisissez **Afficher la carte** puis confirmez. Choisissez **Plan de rue** ou **Satellite · 2016**. Le plan de rue utilise les données vectorielles d’OpenFreeMap. La vue satellite repose sur le mosaïque mondiale Sentinel‑2 de 2016 d’EOxCloudless (CC BY 4.0) : elle est ancienne et son niveau de détail est inférieur à une photo aérienne récente. La source reçoit la zone affichée ; les noms, clients et détails des fiches ne sont pas transmis avec les marqueurs. L’attribution requise est affichée selon le fond choisi.
+Dans **Carte**, choisissez **Afficher la carte**, puis autorisez le chargement. Sélectionnez **Plan de rue** ou **Vue aérienne IGN**. L’imagerie IGN est disponible en France ; la date précise de prise de vue dépend de la zone et peut être consultée dans les informations de l’IGN. Le plan OpenFreeMap peut couvrir d’autres zones, selon la disponibilité de son service public.
 
-Les fonds publics sont gratuits, sans engagement de disponibilité ; OpenFreeMap peut interrompre son instance et EOxCloudless applique une politique d’usage raisonnable sans SLA. EOxCloudless autorise gratuitement l’usage commercial de la couche 2016 avec attribution, contrairement aux couches 2018 et suivantes, qui ne sont pas autorisées pour une application commerciale sans licence payante. Nominatim interdit l’autocomplétion et impose une limite absolue d’une demande par seconde pour l’application. Si le volume devient important, configurez dans **Paramètres → Réglage avancé** un fournisseur Nominatim-compatible qui autorise cet usage. Il n’y a pas de téléchargement hors connexion ni de préchargement de zones.
+Le fournisseur actif reçoit la zone cartographique consultée. Les noms des clients, les noms des chantiers et les détails des fiches restent dans l’application et ne sont pas envoyés avec les marqueurs. L’attribution s’adapte au fond actif : OpenFreeMap / OpenMapTiles / OpenStreetMap ou IGN BD ORTHO.
 
-Consultez la [licence et les limites EOxCloudless](https://cloudless.eox.at/documentation/faq), les [conditions d’utilisation Nominatim](https://operations.osmfoundation.org/policies/nominatim/), les [conditions d’OpenFreeMap](https://openfreemap.org/tos/), son [guide d’intégration](https://openfreemap.org/quick_start/) et les [informations de licence OpenStreetMap](https://www.openstreetmap.org/copyright).
+## Sources et conditions
+
+- [IGN — BD ORTHO, documentation produit](https://geoservices.ign.fr/bdortho)
+- [IGN — service WMTS de la Géoplateforme](https://github.com/IGNF/cartes.gouv.fr-documentation/blob/main/content/fr/guides-utilisateur/utiliser-les-services-de-la-geoplateforme/diffusion/wmts.md)
+- [Dates de prise de vue actuellement diffusées par l’IGN](https://www.geoportail.gouv.fr/depot/fiches/photographies-aeriennes-RVB/geoportail_dates_des_prises_de_vues_aeriennes-RVB.pdf)
+- [Politique d’utilisation du service Nominatim](https://operations.osmfoundation.org/policies/nominatim/)
+- [Conditions OpenFreeMap](https://openfreemap.org/tos/)
+- [Attribution et licence des données OpenStreetMap](https://www.openstreetmap.org/copyright)
