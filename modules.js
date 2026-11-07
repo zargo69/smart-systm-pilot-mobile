@@ -13,7 +13,7 @@ const starterPricebook = [
 const localModulesDefault = {
   appointments: [], suppliers: [], purchases: [], invoices: [], payments: [],
   expenses: [], documents: [], reports: [], auditLogs: [], prospects: [], followups: [], pricebook: starterPricebook,
-  settings: { appName: 'Smart syst’m Pilot', companyName: 'Mon entreprise', country: 'FR', currency: 'EUR' }
+  settings: { appName: 'Smart syst’m Pilot', companyName: 'Mon entreprise', country: 'FR', currency: 'EUR', googleMapsApiKey: '' }
 };
 data = { ...localModulesDefault, ...data, settings: { ...localModulesDefault.settings, ...(data.settings || {}) } };
 let planningView = 'week';
@@ -51,6 +51,7 @@ function save({ restoring = false } = {}) {
     return false;
   }
   let serialized;
+  if (!restoring) captureActivityChanges();
   try { serialized = JSON.stringify(data); }
   catch { rollbackToLastSavedData(); notify('Les données ne peuvent pas être préparées pour l’enregistrement. Aucune modification n’a été gardée.'); return false; }
   try {
@@ -65,6 +66,31 @@ function save({ restoring = false } = {}) {
     notify('Enregistrement impossible : espace local plein ou indisponible. La dernière version enregistrée a été rétablie ; exportez vos données avant de continuer.');
     return false;
   }
+}
+
+const ACTIVITY_LABELS = { clients: 'Client', sites: 'Chantier', quotes: 'Devis', invoices: 'Facture', appointments: 'Intervention', suppliers: 'Fournisseur', purchases: 'Commande', payments: 'Règlement', expenses: 'Dépense', prospects: 'Prospect', followups: 'Relance', tasks: 'Tâche', timeEntries: 'Temps passé', stockItems: 'Article de stock', stockMovements: 'Mouvement de stock', pricebook: 'Prestation', settings: 'Paramètres', documents: 'Document', reports: 'Rapport' };
+function activityRecordName(record) { return String(record?.name || record?.reference || record?.title || record?.label || record?.supplier || record?.client || 'Élément').slice(0, 180); }
+function captureActivityChanges() {
+  let before;
+  try { before = JSON.parse(lastPersistedData || '{}'); } catch { return; }
+  data.auditLogs ||= [];
+  const actor = currentLocalActor();
+  const add = (collection, record, action) => data.auditLogs.unshift({ id: newId(), collection, recordId: String(record?.id || `${collection}-${Date.now()}`), recordName: activityRecordName(record), action, ...actor, occurredAt: new Date().toISOString() });
+  for (const collection of Object.keys(data)) {
+    if (collection === 'auditLogs' || ['documents', 'reports'].includes(collection) || !Array.isArray(data[collection])) continue;
+    const oldRows = Array.isArray(before[collection]) ? before[collection] : [];
+    const oldById = new Map(oldRows.filter(row => row && row.id).map(row => [String(row.id), row]));
+    const newRows = data[collection] || [];
+    const newById = new Map(newRows.filter(row => row && row.id).map(row => [String(row.id), row]));
+    for (const [id, record] of newById) {
+      const old = oldById.get(id);
+      if (!old) add(collection, record, 'Ajouté');
+      else if (JSON.stringify(old) !== JSON.stringify(record)) add(collection, record, 'Modifié');
+    }
+    for (const [id, record] of oldById) if (!newById.has(id)) add(collection, record, 'Supprimé définitivement');
+  }
+  if (JSON.stringify(before.settings || {}) !== JSON.stringify(data.settings || {})) add('settings', { id: 'company-settings', name: 'Paramètres de l’entreprise' }, 'Modifié');
+  data.auditLogs = data.auditLogs.slice(0, 2000);
 }
 
 const eurosToCents = value => Math.round((Number(value) || 0) * 100);
@@ -85,11 +111,72 @@ openEditSite = function (id) {
   if (!form || !site || !actions) return;
   const coordinates = document.createElement('div');
   coordinates.className = 'form-row';
-  coordinates.innerHTML = `<label>Latitude GPS<input name="latitude" type="number" min="-90" max="90" step="0.000001" value="${esc(site.latitude ?? '')}" placeholder="Ex. 45.7640"></label><label>Longitude GPS<input name="longitude" type="number" min="-180" max="180" step="0.000001" value="${esc(site.longitude ?? '')}" placeholder="Ex. 4.8357"></label>`;
+  coordinates.innerHTML = `<label>Latitude GPS<input name="latitude" type="number" min="-90" max="90" step="0.000001" value="${esc(site.latitude ?? '')}" placeholder="Choisie depuis l’adresse"></label><label>Longitude GPS<input name="longitude" type="number" min="-180" max="180" step="0.000001" value="${esc(site.longitude ?? '')}" placeholder="Choisie depuis l’adresse"></label>`;
   actions.before(coordinates);
-  const note = document.createElement('p'); note.className = 'form-hint'; note.textContent = 'Les coordonnées ne sont pas devinées à partir de l’adresse. Saisissez-les après vérification si vous souhaitez placer ce chantier sur la carte.';
-  actions.before(note);
 };
+
+async function mountGoogleAddressSearch(input) {
+  if (!input || input.dataset.googleAddressReady === 'true') return;
+  const key = String(data.settings?.googleMapsApiKey || '').trim();
+  if (!key) {
+    const note = document.createElement('small'); note.className = 'form-hint'; note.textContent = 'Pour obtenir des suggestions et placer cette adresse sur la carte, ajoutez votre clé Google Maps dans Paramètres.';
+    input.after(note); input.dataset.googleAddressReady = 'missing-key'; return;
+  }
+  input.dataset.googleAddressReady = 'loading';
+  try {
+    await loadGoogleMaps();
+    const places = await google.maps.importLibrary('places');
+    const form = input.form; if (!form?.isConnected) return;
+    let latitude = form.elements.namedItem('latitude');
+    let longitude = form.elements.namedItem('longitude');
+    if (!latitude) { latitude = document.createElement('input'); latitude.type = 'hidden'; latitude.name = 'latitude'; form.append(latitude); }
+    if (!longitude) { longitude = document.createElement('input'); longitude.type = 'hidden'; longitude.name = 'longitude'; form.append(longitude); }
+    const host = document.createElement('div'); host.className = 'google-address-search';
+    const searchLabel = document.createElement('label'); searchLabel.className = 'google-address-label'; searchLabel.textContent = 'Rechercher une adresse avec Google';
+    const suggestion = new places.PlaceAutocompleteElement();
+    suggestion.setAttribute('placeholder', 'Rechercher et choisir une adresse avec Google');
+    suggestion.includedRegionCodes = data.settings.country === 'CH' ? ['ch'] : ['fr'];
+    host.append(suggestion); searchLabel.append(host);
+    const originalLabel = input.closest('label');
+    if (originalLabel) { originalLabel.hidden = true; originalLabel.after(searchLabel); } else input.after(searchLabel);
+    suggestion.addEventListener('gmp-select', async event => {
+      try {
+        const place = event.placePrediction.toPlace();
+        await place.fetchFields({ fields: ['formattedAddress', 'location', 'addressComponents'] });
+        if (!place.formattedAddress) return notify('Google n’a pas fourni d’adresse complète pour ce résultat.');
+        input.value = place.formattedAddress;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        if (place.location) { latitude.value = String(place.location.lat()); longitude.value = String(place.location.lng()); }
+        const components = place.addressComponents || [];
+        const city = components.find(component => component.types.includes('locality'))?.longText || components.find(component => component.types.includes('postal_town'))?.longText;
+        const postal = components.find(component => component.types.includes('postal_code'))?.longText;
+        if (city && form.elements.namedItem('city')) form.elements.namedItem('city').value = city;
+        if (postal && form.elements.namedItem('postalCode')) form.elements.namedItem('postalCode').value = postal;
+      } catch { notify('Impossible de récupérer les détails de cette adresse Google. Vérifiez la clé et les API activées.'); }
+    });
+    input.dataset.googleAddressReady = 'true';
+  } catch (error) {
+    input.dataset.googleAddressReady = 'error';
+    const note = document.createElement('small'); note.className = 'form-hint'; note.textContent = error.message;
+    input.after(note);
+  }
+}
+
+const addressFormObserver = new MutationObserver(() => {
+  const clientForm = document.querySelector('#modal-content [data-form="client"]');
+  if (clientForm && !clientForm.elements.namedItem('address')) {
+    const cityLabel = clientForm.querySelector('[name="city"]')?.closest('label');
+    if (cityLabel) {
+      const label = document.createElement('label'); label.textContent = 'Adresse complète';
+      const address = document.createElement('input'); address.name = 'address'; address.type = 'text'; address.maxLength = 240; address.autocomplete = 'street-address'; address.placeholder = 'Commencez à saisir puis choisissez une suggestion';
+      label.append(address); cityLabel.after(label);
+    }
+  }
+  document.querySelectorAll('#modal-content form input[name="address"]').forEach(input => { if (!input.dataset.googleAddressReady) mountGoogleAddressSearch(input); });
+});
+const addressModal = document.getElementById('modal-content');
+if (addressModal) addressFormObserver.observe(addressModal, { childList: true, subtree: true });
+
 function migrateLocalSiteLinks() {
   let changed = false;
   for (const collection of ['appointments','purchases','quotes','invoices','expenses','documents','reports','tasks','timeEntries','stockMovements']) {
@@ -238,7 +325,7 @@ function mapPage() {
   const missing = (data.sites || []).filter(site => !located.includes(site));
   const statuses = [...new Set(located.map(site => site.status).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
   const clients = [...new Set(located.map(site => site.client).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
-  return `${heading('SUIVI OPÉRATIONNEL', 'Carte des chantiers', 'Repérez les chantiers dont les coordonnées GPS ont été renseignées.')}${localNotice}<section class="panel map-panel"><div class="panel-head"><div><h2>${located.length} chantier(s) localisé(s)</h2><p>Les adresses ne sont pas géocodées automatiquement.</p></div><button class="btn primary" data-map-action="load" ${located.length ? '' : 'disabled'}>Afficher la carte</button></div><p class="form-hint">La carte utilise les coordonnées de vos fiches. Les tuiles cartographiques sont chargées depuis OpenStreetMap uniquement après votre clic. Le fournisseur reçoit la zone affichée ; les noms, adresses et autres données de chantier restent dans l’application.</p>${located.length ? `<div class="map-filters"><label>Rechercher<input id="map-search" type="search" placeholder="Chantier, adresse ou client"></label><label>Statut<select id="map-filter-status"><option value="Tous">Tous les statuts</option>${statuses.map(status => `<option>${esc(status)}</option>`).join('')}</select></label><label>Client<select id="map-filter-client"><option value="Tous">Tous les clients</option>${clients.map(client => `<option>${esc(client)}</option>`).join('')}</select></label><span id="map-results-count" class="map-results-count">${located.length} chantier(s) affiché(s)</span></div><div class="map-legend" aria-label="Légende de la carte">${statuses.map(status => `<span><i class="site-map-pin map-status-${statusSlug(status)}"></i>${esc(status)}</span>`).join('')}<span><i class="site-map-cluster map-legend-cluster">+</i>Chantiers proches regroupés</span></div>` : ''}<div id="site-map" class="site-map" aria-label="Carte interactive des chantiers" hidden></div>${missing.length ? `<section class="map-unlocated"><h3>Coordonnées à renseigner</h3><p>Modifiez chaque chantier pour saisir sa latitude et sa longitude. Aucune position n’est inventée.</p>${missing.map(site => `<button class="btn secondary" data-site="${esc(site.id)}">${esc(site.name)} · ${esc(site.address || 'adresse à compléter')}</button>`).join('')}</section>` : ''}<small class="map-attribution">© OpenStreetMap contributors · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">Licence et attribution</a></small></section>`;
+  return `${heading('SUIVI OPÉRATIONNEL', 'Carte des chantiers', 'Visualisez les chantiers géolocalisés et retrouvez les adresses avec Google Maps.')}${localNotice}<section class="panel map-panel"><div class="panel-head"><div><h2>${located.length} chantier(s) localisé(s)</h2><p>${data.sites.length - located.length} adresse(s) à localiser</p></div><button class="btn primary" data-map-action="load">Afficher la carte</button></div><p class="form-hint">Google Maps charge le fond de carte après votre autorisation. Les adresses saisies dans les formulaires sont envoyées à Google pour proposer des suggestions. La clé API doit être configurée et restreinte dans Paramètres.</p>${data.sites.length ? `<div class="map-filters"><label>Rechercher un chantier<input id="map-search" type="search" placeholder="Chantier, adresse ou client"></label><label>Statut<select id="map-filter-status"><option value="Tous">Tous les statuts</option>${statuses.map(status => `<option>${esc(status)}</option>`).join('')}</select></label><label>Client<select id="map-filter-client"><option value="Tous">Tous les clients</option>${clients.map(client => `<option>${esc(client)}</option>`).join('')}</select></label><span id="map-results-count" class="map-results-count">${located.length} chantier(s) localisé(s)</span></div>` : `<p class="empty-state">Ajoutez un chantier puis choisissez son adresse dans les suggestions Google pour le placer sur la carte.</p>`}<div id="site-map" class="site-map" aria-label="Carte Google Maps des chantiers" hidden></div>${missing.length ? `<section class="map-unlocated"><h3>Adresses à compléter</h3><p>Ouvrez un chantier et choisissez une suggestion Google pour enregistrer sa position exacte.</p>${missing.map(site => `<button class="btn secondary" data-site="${esc(site.id)}">${esc(site.name)} · ${esc(site.address || 'adresse à compléter')}</button>`).join('')}</section>` : ''}<small class="map-attribution">Google Maps · Conditions et confidentialité Google</small></section>`;
 }
 
 function filteredMapSites() {
@@ -248,140 +335,65 @@ function filteredMapSites() {
   return sitesWithCoordinates().filter(site => (status === 'Tous' || site.status === status) && (client === 'Tous' || site.client === client) && (!query || `${site.name} ${site.client} ${site.address || ''} ${site.status || ''}`.toLocaleLowerCase('fr').includes(query)));
 }
 
-function loadLeaflet() {
-  if (window.L) return Promise.resolve();
-  if (window.__sspLeafletLoad) return window.__sspLeafletLoad;
-  window.__sspLeafletLoad = new Promise((resolve, reject) => {
-    if (!document.querySelector('link[data-leaflet-css]')) {
-      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      css.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='; css.crossOrigin = ''; css.dataset.leafletCss = 'true'; document.head.append(css);
-    }
-    const script = document.createElement('script'); script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo='; script.crossOrigin = '';
-    script.onload = resolve; script.onerror = () => reject(new Error('La bibliothèque cartographique ne peut pas être chargée.'));
+function loadGoogleMaps() {
+  const key = String(data.settings?.googleMapsApiKey || '').trim();
+  if (!key) return Promise.reject(new Error('Ajoutez d’abord votre clé Google Maps dans Paramètres.'));
+  if (window.google?.maps?.importLibrary) return window.google.maps.importLibrary('maps');
+  if (window.__sspGoogleMapsLoad) return window.__sspGoogleMapsLoad;
+  window.__sspGoogleMapsLoad = new Promise((resolve, reject) => {
+    window.gm_authFailure = () => reject(new Error('Google Maps a refusé la clé. Vérifiez la facturation, les API activées et les restrictions du site.'));
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&libraries=places`;
+    script.async = true;
+    script.onerror = () => reject(new Error('Google Maps ne peut pas être chargé. Vérifiez la connexion et la clé API.'));
+    script.onload = () => { if (window.google?.maps?.importLibrary) window.google.maps.importLibrary('maps').then(resolve).catch(reject); else reject(new Error('La bibliothèque Google Maps est indisponible.')); };
     document.head.append(script);
   });
-  return window.__sspLeafletLoad;
+  return window.__sspGoogleMapsLoad;
 }
 
 function showMapConsent() {
-  modal('Charger la carte OpenStreetMap', `<div class="detail-card"><p>Pour afficher le fond de carte, l’application téléchargera la bibliothèque Leaflet depuis unpkg et les tuiles visibles depuis OpenStreetMap.</p><p>OpenStreetMap recevra les demandes de tuiles de la zone affichée, ce qui peut révéler la zone consultée. Les marqueurs et coordonnées de vos chantiers sont ajoutés dans votre navigateur ; les noms et adresses ne sont pas envoyés.</p><p class="form-hint">Aucun fond cartographique ne sera mis en cache pour une utilisation hors connexion. Attribution © OpenStreetMap contributors.</p><button class="btn primary full-btn" data-map-action="confirm-load">Autoriser et afficher</button><button class="btn secondary full-btn" data-map-action="cancel-load">Annuler</button></div>`);
+  modal('Charger Google Maps', `<div class="detail-card"><p>Google recevra la zone affichée sur la carte. Les adresses saisies dans le champ de recherche Google sont transmises à Google pour fournir les suggestions.</p><p class="form-hint">La carte nécessite une clé API Google Maps avec facturation et restrictions configurées dans Paramètres.</p><button class="btn primary full-btn" data-map-action="confirm-load">Autoriser et afficher</button><button class="btn secondary full-btn" data-map-action="cancel-load">Annuler</button></div>`);
 }
 
 async function initializeSiteMap() {
   const container = $('#site-map'); if (!container) return;
-  const allSites = sitesWithCoordinates();
-  if (!allSites.length) return notify('Renseignez les coordonnées GPS d’au moins un chantier.');
-  try { await loadLeaflet(); }
-  catch (error) { return notify(error.message); }
+  let maps;
+  try { maps = await loadGoogleMaps(); } catch (error) { return notify(error.message); }
   container.hidden = false;
-  if (window.__sspMap) { window.__sspMap.remove(); window.__sspMap = null; }
-  const initialSites = filteredMapSites();
-  const anchor = initialSites[0] || allSites[0];
-  const map = L.map(container, { scrollWheelZoom: false, maxZoom: 16 }).setView([Number(anchor.latitude), Number(anchor.longitude)], initialSites.length <= 1 ? 13 : 7);
-  window.__sspMap = map;
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' }).addTo(map);
-  window.__sspMapMarkers = L.layerGroup().addTo(map);
+  const sites = sitesWithCoordinates();
+  const first = sites[0];
+  const map = new maps.Map(container, { center: first ? { lat: Number(first.latitude), lng: Number(first.longitude) } : { lat: 46.6, lng: 2.4 }, zoom: first ? 9 : 6, mapTypeControl: false, streetViewControl: false, fullscreenControl: true, gestureHandling: 'cooperative' });
+  window.__sspMap = map; window.__sspGoogleMarkers = [];
   refreshSiteMapMarkers();
-  map.on('zoomend', () => refreshSiteMapMarkers());
-  const fitSites = initialSites.length ? initialSites : allSites;
-  if (fitSites.length > 1) map.fitBounds(L.latLngBounds(fitSites.map(site => [Number(site.latitude), Number(site.longitude)])).pad(0.18));
-  setTimeout(() => map.invalidateSize(), 50);
+  setTimeout(() => window.google?.maps?.event?.trigger(map, 'resize'), 150);
 }
 
 function refreshSiteMapMarkers({ fitView = false } = {}) {
   const map = window.__sspMap;
-  const markerGroup = window.__sspMapMarkers;
   const sites = filteredMapSites();
   const count = $('#map-results-count');
-  if (count) count.textContent = `${sites.length} chantier(s) affiché(s)`;
-  if (!map || !markerGroup || !$('#site-map')) return;
-  markerGroup.clearLayers();
+  if (count) count.textContent = `${sites.length} chantier(s) localisé(s)`;
+  if (!map || !$('#site-map')) return;
+  for (const marker of window.__sspGoogleMarkers || []) marker.setMap(null);
+  window.__sspGoogleMarkers = [];
   if (!sites.length) return;
   if (fitView) {
-    if (sites.length === 1) map.setView([Number(sites[0].latitude), Number(sites[0].longitude)], 13);
-    else map.fitBounds(L.latLngBounds(sites.map(site => [Number(site.latitude), Number(site.longitude)])).pad(0.18));
+    if (sites.length === 1) { map.setCenter({ lat: Number(sites[0].latitude), lng: Number(sites[0].longitude) }); map.setZoom(14); }
+    else { const bounds = new google.maps.LatLngBounds(); sites.forEach(site => bounds.extend({ lat: Number(site.latitude), lng: Number(site.longitude) })); map.fitBounds(bounds, 48); }
   }
-
-  const pointGroups = [];
+  const info = new google.maps.InfoWindow();
   for (const site of sites) {
-    const point = map.project([Number(site.latitude), Number(site.longitude)]);
-    let group = pointGroups.find(candidate => Math.hypot(candidate.point.x - point.x, candidate.point.y - point.y) <= 56);
-    if (!group) { group = { point, sites: [] }; pointGroups.push(group); }
-    group.sites.push(site);
-    group.point = L.point(group.sites.reduce((sum, item) => sum + map.project([Number(item.latitude), Number(item.longitude)]).x, 0) / group.sites.length, group.sites.reduce((sum, item) => sum + map.project([Number(item.latitude), Number(item.longitude)]).y, 0) / group.sites.length);
+    const pinColor = site.status === 'En cours' ? '#078b70' : site.status === 'Bloqué' ? '#dc6256' : site.status === 'Terminé' ? '#7b8990' : '#3867d6';
+    const marker = new google.maps.Marker({ map, position: { lat: Number(site.latitude), lng: Number(site.longitude) }, title: `${site.name} · ${site.status || 'Chantier'}`, icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: pinColor, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2, scale: 8 } });
+    marker.addListener('click', () => {
+      const upcoming = (data.appointments || []).filter(item => (item.siteId === site.id || item.site === site.name) && item.date >= todayISO() && !['Terminée','Annulée'].includes(item.status)).sort((a,b) => `${a.date} ${a.time || ''}`.localeCompare(`${b.date} ${b.time || ''}`)).slice(0, 2);
+      const next = upcoming.length ? `<br>Prochaine intervention : ${upcoming.map(item => `${esc(item.date)} · ${esc(item.title)}`).join('<br>')}` : '';
+      info.setContent(`<b>${esc(site.name)}</b><br>${esc(site.status || 'Statut non renseigné')}<br>${esc(site.address || 'Adresse non renseignée')}${next}<br><a href="#chantiers" data-open-site="${esc(site.id)}">Ouvrir le dossier</a>`);
+      info.open({ map, anchor: marker });
+    });
+    window.__sspGoogleMarkers.push(marker);
   }
-
-  const openSite = id => { route('chantiers'); showSite(id); };
-  const popupFor = site => {
-    const upcoming = (data.appointments || []).filter(item => (item.siteId === site.id || item.site === site.name) && item.date >= todayISO() && !['Terminée','Annulée'].includes(item.status)).sort((a,b) => `${a.date} ${a.time || ''}`.localeCompare(`${b.date} ${b.time || ''}`)).slice(0, 2);
-    const appointments = upcoming.length ? `<br><small>Prochaine intervention : ${upcoming.map(item => `${esc(item.date)} · ${esc(item.title)}`).join('<br>')}</small>` : '';
-    return `<b>${esc(site.name)}</b><br>${esc(site.status || 'Statut non renseigné')}<br>${esc(site.address || 'Adresse non renseignée')}${appointments}<br><button class="map-popup-open" type="button" data-open-site="${esc(site.id)}">Ouvrir le dossier</button>`;
-  };
-  for (const group of pointGroups) {
-    const locations = group.sites.map(site => [Number(site.latitude), Number(site.longitude)]);
-    const center = locations.length === 1 ? locations[0] : [locations.reduce((sum, point) => sum + point[0], 0) / locations.length, locations.reduce((sum, point) => sum + point[1], 0) / locations.length];
-    let marker;
-    if (group.sites.length > 1) {
-      marker = L.marker(center, { icon: L.divIcon({ className: 'site-map-marker-shell', html: `<span class="site-map-cluster" aria-label="${group.sites.length} chantiers proches">${group.sites.length}</span>`, iconSize: [38,38], iconAnchor: [19,19] }) });
-      marker.bindPopup(group.sites.map(popupFor).join('<hr>'));
-    } else {
-      const site = group.sites[0];
-      const style = site.priority && /urgent|haute|critique/i.test(site.priority) ? 'urgent' : statusSlug(site.status);
-      marker = L.marker(center, { icon: L.divIcon({ className: 'site-map-marker-shell', html: `<span class="site-map-pin map-status-${style}" title="${esc(site.status || 'Statut non renseigné')}"></span>`, iconSize: [22,30], iconAnchor: [11,28] }) });
-      marker.bindPopup(popupFor(site));
-    }
-    marker.addTo(markerGroup);
-    marker.on('popupopen', event => event.popup.getElement()?.querySelectorAll('[data-open-site]').forEach(button => button.addEventListener('click', () => openSite(button.dataset.openSite))));
-  }
-}
-
-function statusSlug(value = '') {
-  const normalized = String(value).toLocaleLowerCase('fr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  return ({ 'en-cours': 'active', 'a-preparer': 'prepare', 'planifie': 'prepare', 'en-attente': 'waiting', 'bloque': 'urgent', 'a-receptionner': 'finish', 'termine': 'finish', 'archive': 'muted' })[normalized] || 'muted';
-}
-
-function planningPage() {
-  const all = [...(data.appointments || [])].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
-  const filtered = all.filter(item => (!planningSiteFilter || item.siteId === planningSiteFilter || (data.sites || []).some(site => site.id === planningSiteFilter && site.name === item.site)) && (!planningAssigneeFilter || item.assignee === planningAssigneeFilter));
-  const { start, end, days } = planningCalendarRange(planningAnchor, planningView);
-  const inRange = filtered.filter(item => item.date >= planningISO(start) && item.date <= planningISO(end));
-  const sites = [...new Map((data.sites || []).map(site => [site.id, site])).values()];
-  const assignees = [...new Set(all.map(item => item.assignee).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
-  const title = planningView === 'day' ? new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(start) : planningView === 'month' ? new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(new Date(`${planningAnchor}T12:00:00`)) : `${new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(start)} – ${new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }).format(end)}`;
-  const viewButtons = [['day','Jour'],['week','Semaine'],['month','Mois']].map(([value,label]) => `<button class="btn ${planningView === value ? 'primary' : 'secondary'} planning-view-button" data-planning-view="${value}" aria-pressed="${planningView === value}">${label}</button>`).join('');
-  const calendarDays = days.map(day => {
-    const iso = planningISO(day);
-    const items = inRange.filter(item => item.date === iso);
-    return `<article class="planning-day ${iso === todayISO() ? 'is-today' : ''} ${planningView === 'month' && day.getMonth() !== new Date(`${planningAnchor}T12:00:00`).getMonth() ? 'is-outside-month' : ''}" data-planning-date="${iso}"><button class="planning-day-head" data-calendar-date="${iso}" aria-label="Afficher le ${iso}"><span>${new Intl.DateTimeFormat('fr-FR', { weekday: planningView === 'month' ? 'short' : 'long' }).format(day)}</span><b>${day.getDate()}</b></button><div class="planning-day-items">${items.slice(0, planningView === 'month' ? 3 : 20).map(item => `<button class="planning-event" data-record-menu="${esc(item.id)}" title="${esc(item.title)} · ${esc(item.assignee)}"><b>${esc(item.time || 'Heure ?')} · ${esc(item.title)}</b><small>${esc(siteLabel(item))} · ${esc(item.assignee || 'Intervenant à définir')}</small></button>`).join('')}${items.length > (planningView === 'month' ? 3 : 20) ? `<span class="planning-more">+${items.length - (planningView === 'month' ? 3 : 20)} autre(s)</span>` : ''}${!items.length && planningView !== 'month' ? '<span class="planning-empty">Aucune intervention</span>' : ''}</div></article>`;
-  }).join('');
-  return `${heading('ORGANISATION', 'Planning', 'Planifiez les interventions par jour, semaine ou mois et filtrez par chantier ou intervenant.', `<button class="btn primary" data-module-action="appointment">＋ Nouvelle intervention</button>`)}${localNotice}<section class="panel planning-panel"><div class="planning-toolbar"><div class="planning-nav"><button class="btn secondary" data-planning-shift="-1" aria-label="Période précédente">‹</button><button class="btn secondary planning-today" data-planning-today>Aujourd’hui</button><button class="btn secondary" data-planning-shift="1" aria-label="Période suivante">›</button><strong>${esc(title)}</strong></div><div class="planning-view-switch" role="group" aria-label="Affichage du planning">${viewButtons}</div></div><div class="planning-filters"><label>Date de référence<input id="planning-anchor" type="date" value="${esc(planningAnchor)}"></label><label>Chantier<select id="planning-site-filter"><option value="">Tous les chantiers</option>${sites.map(site => `<option value="${esc(site.id)}" ${planningSiteFilter === site.id ? 'selected' : ''}>${esc(site.name)}</option>`).join('')}</select></label><label>Intervenant<select id="planning-assignee-filter"><option value="">Toute l’équipe</option>${assignees.map(name => `<option ${planningAssigneeFilter === name ? 'selected' : ''}>${esc(name)}</option>`).join('')}</select></label><span class="planning-count">${inRange.length} intervention(s)</span></div><div class="planning-calendar planning-${planningView}">${planningView !== 'day' ? '<div class="planning-weekdays"><span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span></div>' : ''}${calendarDays}</div><p class="form-hint planning-note">Les durées de déplacement ne sont pas estimées. Les intervenants sont des libellés saisis manuellement ; aucune disponibilité externe ni équipe partagée n’est configurée.</p></section><section class="panel"><div class="panel-head"><div><h2>Interventions sur la période</h2><p>${all.length} intervention(s) au total sur cet appareil.</p></div></div>${moduleList(inRange.map(item => moduleRow('▦', item.title, `${item.date} · ${item.time} · ${siteLabel(item)} · ${item.assignee} · ${item.duration} min`, `<span class="pill neutral">${esc(item.status)}</span>`, item.id)), 'Aucune intervention dans cette période et ces filtres.')}</section>`;
-}
-
-function planningISO(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function planningCalendarRange(anchor, view) {
-  const base = new Date(`${anchor}T12:00:00`);
-  let start = new Date(base), end = new Date(base);
-  if (view === 'week') {
-    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    end = new Date(start); end.setDate(end.getDate() + 6);
-  } else if (view === 'month') {
-    start = new Date(base.getFullYear(), base.getMonth(), 1, 12);
-    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    end = new Date(base.getFullYear(), base.getMonth() + 1, 0, 12);
-    end.setDate(end.getDate() + (7 - ((end.getDay() + 6) % 7) - 1));
-  }
-  const days = [];
-  for (let day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) days.push(new Date(day));
-  return { start, end, days };
-}
-
-function purchasesPage() {
-  const total = data.purchases.filter(x => x.status !== 'Annulée').reduce((sum, x) => sum + Number(x.amountHT || 0), 0);
-  return `${heading('APPROVISIONNEMENT', 'Achats & matériel', 'Détaillez les articles, suivez les commandes et enregistrez les réceptions partielles.', `<button class="btn secondary" data-module-action="supplier">＋ Fournisseur</button> <button class="btn primary" data-module-action="purchase">＋ Commande</button>`)}${localNotice}<div class="metric-grid compact-metrics"><article class="metric-card"><div class="metric-label">Fournisseurs</div><strong>${data.suppliers.length}</strong></article><article class="metric-card"><div class="metric-label">Commandes</div><strong>${data.purchases.length}</strong></article><article class="metric-card"><div class="metric-label">Engagé HT · indicatif</div><strong>${money(total)}</strong><div class="metric-note">Ne signifie pas que la commande est payée</div></article></div><section class="panel"><div class="panel-head"><div><h2>Commandes</h2><p>Ouvrez une commande pour contrôler ses lignes et ses réceptions. Le statut de réception ne confirme pas le paiement.</p></div></div>${moduleList(data.purchases.map(x => { const lines = Array.isArray(x.lines) ? x.lines : []; const ordered = lines.reduce((sum, line) => sum + Number(line.quantity || 0), 0); const received = lines.reduce((sum, line) => sum + Number(line.receivedQuantity || 0), 0); const detail = lines.length ? `${lines.length} article(s) · ${received}/${ordered} unité(s) reçue(s)` : 'Ancienne commande · détail des lignes indisponible'; return moduleRow('▧', `${x.reference} · ${x.supplier}`, `${siteLabel(x)} · livraison ${x.delivery || 'non renseignée'} · ${money(x.amountHT)} HT · ${detail}`, `<span class="pill neutral">${esc(x.status)}</span>`, x.id); }), 'Aucune commande enregistrée.')}</section><section class="panel list-panel"><div class="panel-head"><div><h2>Fournisseurs</h2><p>Coordonnées saisies manuellement</p></div></div>${moduleList(data.suppliers.map(x => moduleRow('♙', x.name, [x.email, x.phone].filter(Boolean).join(' · ') || 'Coordonnées à compléter', '', x.id)), 'Aucun fournisseur enregistré.')}</section>`;
 }
 
 function invoiceListRow(invoice) {
@@ -399,7 +411,7 @@ function openInvoiceDetails(id) {
   const paid = payments.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const remaining = Math.max(0, Number(invoice.amountTTC || 0) - paid);
   const client = data.clients.find(item => item.name === invoice.client);
-  modal(invoice.reference || 'Facture brouillon', `<div class="detail-card"><span class="pill neutral">${esc(invoice.status || 'Brouillon local')}</span><p><b>Client</b><br>${esc(invoice.client || 'À préciser')}${client?.email ? `<br>${esc(client.email)}` : ''}</p><p><b>Chantier</b><br>${esc(siteLabel(invoice))}</p><p><b>Date de facture</b><br>${esc(invoice.invoiceDate || 'Non précisée')}</p><p><b>Échéance</b><br>${esc(invoice.dueDate || 'Non précisée')}</p><p><b>Total HT / TTC indicatif</b><br>${money(invoice.amountHT)} HT · ${money(invoice.amountTTC)} TTC</p><p><b>Règlements saisis</b><br>${money(paid)} · reste indicatif ${money(remaining)}</p><p class="form-hint">Cette facture reste un brouillon local : l’application n’attribue pas de numéro comptable et ne vérifie pas les mentions légales. L’aperçu PDF porte clairement la mention brouillon.</p><button class="btn primary full-btn" data-invoice-action="print" data-id="${esc(id)}">Voir l’aperçu et enregistrer en PDF</button><button class="btn secondary full-btn" data-invoice-action="email" data-id="${esc(id)}">Préparer un e-mail au client</button>${remaining > 0 ? `<button class="btn secondary full-btn" data-invoice-action="payment" data-id="${esc(id)}">Saisir un règlement reçu</button>` : ''}</div>`);
+  modal(invoice.reference || 'Facture brouillon', `<div class="detail-card"><span class="pill neutral">${esc(invoice.status || 'Brouillon local')}</span><p><b>Client</b><br>${esc(invoice.client || 'À préciser')}${client?.email ? `<br>${esc(client.email)}` : ''}</p><p><b>Chantier</b><br>${esc(siteLabel(invoice))}</p><p><b>Date de facture</b><br>${esc(invoice.invoiceDate || 'Non précisée')}</p><p><b>Échéance</b><br>${esc(invoice.dueDate || 'Non précisée')}</p><p><b>Total HT / TTC indicatif</b><br>${money(invoice.amountHT)} HT · ${money(invoice.amountTTC)} TTC</p><p><b>Règlements saisis</b><br>${money(paid)} · reste indicatif ${money(remaining)}</p><p class="form-hint">Cette facture reste un brouillon local : l’application n’attribue pas de numéro comptable et ne vérifie pas les mentions légales. L’aperçu PDF porte clairement la mention brouillon.</p><button class="btn primary full-btn" data-invoice-action="print" data-id="${esc(id)}">Voir l’aperçu et enregistrer en PDF</button><button class="btn secondary full-btn" data-invoice-action="email" data-id="${esc(id)}">Préparer un e-mail au client</button>${remaining > 0 ? `<button class="btn secondary full-btn" data-invoice-action="payment" data-id="${esc(id)}">Saisir un règlement reçu</button>` : ''}${payments.length === 0 ? `<button class="btn danger full-btn" data-invoice-action="delete" data-id="${esc(id)}">Supprimer cette facture brouillon</button>` : '<p class="form-hint">Cette facture ne peut plus être supprimée car un règlement y est rattaché.</p>'}</div>`);
 }
 
 function openInvoicePrint(id) {
@@ -422,11 +434,12 @@ function openInvoicePrint(id) {
   </div><p class="form-hint print-help">Sur iPhone, utilisez Imprimer puis ouvrez le partage de l’aperçu pour enregistrer dans Fichiers ou l’envoyer. Pour un envoi par e-mail, joignez le PDF enregistré.</p><div class="form-actions print-controls"><button class="btn secondary" data-invoice-action="back" data-id="${esc(id)}">Retour</button><button class="btn primary" data-invoice-action="print-now">Imprimer / enregistrer en PDF</button></div>`);
 }
 
+
 function financesPage() {
   const paidFor = id => data.payments.filter(p => p.invoiceId === id).reduce((sum, p) => sum + Number(p.amount || 0), 0);
   const receivable = data.invoices.reduce((sum, x) => sum + Math.max(0, Number(x.amountTTC || 0) - paidFor(x.id)), 0);
   const expenses = data.expenses.reduce((sum, x) => sum + Number(x.amount || 0), 0);
-  return `${heading('PILOTAGE FINANCIER', 'Finances', 'Consultez vos factures, exportez-les en PDF et suivez les règlements saisis.', `<button class="btn secondary" data-module-action="expense">＋ Dépense</button> <button class="btn primary" data-module-action="invoice">＋ Nouvelle facture</button>`)}${localNotice}<div class="metric-grid compact-metrics"><article class="metric-card"><div class="metric-label">Factures brouillon · TTC indicatif</div><strong>${money(data.invoices.reduce((s, x) => s + Number(x.amountTTC || 0), 0))}</strong><div class="metric-note">À vérifier avant toute utilisation</div></article><article class="metric-card"><div class="metric-label">À encaisser · selon saisies</div><strong>${money(receivable)}</strong><div class="metric-note">Pas un solde bancaire réel</div></article><article class="metric-card"><div class="metric-label">Dépenses saisies</div><strong>${money(expenses)}</strong><div class="metric-note">Engagées ou payées selon votre saisie</div></article></div><section class="panel"><div class="panel-head"><div><h2>Factures</h2><p>Ouvrez une facture pour la visualiser, l’imprimer en PDF ou saisir un règlement.</p></div></div>${moduleList(data.invoices.map(invoiceListRow), 'Aucune facture. Créez-en une à partir d’un devis accepté.')}</section><section class="panel list-panel"><div class="panel-head"><div><h2>Dépenses</h2><p>Une facture fournisseur n’est pas un paiement confirmé.</p></div></div>${moduleList(data.expenses.map(x => moduleRow('◒', x.label, `${siteLabel(x)} · ${x.date} · ${x.status}`, `<strong>${money(x.amount)}</strong>`, x.id)), 'Aucune dépense saisie.')}</section><section class="panel list-panel"><div class="panel-head"><div><h2>Règlements saisis</h2><p>À rapprocher avec les justificatifs bancaires.</p></div></div>${moduleList(data.payments.map(x => moduleRow('€', x.invoiceRef, `${x.date} · ${x.method}`, `<strong>${money(x.amount)}</strong>`)), 'Aucun règlement saisi.')}</section>`;
+  return `${heading('PILOTAGE FINANCIER', 'Finances', 'Consultez vos factures, exportez-les en PDF et suivez les règlements saisis.', `<button class="btn secondary" data-module-action="expense">＋ Dépense</button> <button class="btn primary" data-module-action="invoice">＋ Nouvelle facture</button>`)}${localNotice}<div class="metric-grid compact-metrics"><article class="metric-card"><div class="metric-label">Factures brouillon · TTC indicatif</div><strong>${money(data.invoices.reduce((s, x) => s + Number(x.amountTTC || 0), 0))}</strong><div class="metric-note">À vérifier avant toute utilisation</div></article><article class="metric-card"><div class="metric-label">À encaisser · selon saisies</div><strong>${money(receivable)}</strong><div class="metric-note">Pas un solde bancaire réel</div></article><article class="metric-card"><div class="metric-label">Dépenses saisies</div><strong>${money(expenses)}</strong><div class="metric-note">Engagées ou payées selon votre saisie</div></article></div><section class="panel"><div class="panel-head"><div><h2>Factures</h2><p>Ouvrez une facture pour la visualiser, l’imprimer en PDF ou saisir un règlement.</p></div></div>${moduleList(data.invoices.map(invoiceListRow), 'Aucune facture. Créez-en une à partir d’un devis accepté.')}</section><section class="panel list-panel"><div class="panel-head"><div><h2>Dépenses</h2><p>Une facture fournisseur n’est pas un paiement confirmé.</p></div></div>${moduleList(data.expenses.map(x => moduleRow('◒', x.label, `${siteLabel(x)} · ${x.date} · ${x.status}`, `<strong>${money(x.amount)}</strong>`, x.id)), 'Aucune dépense saisie.')}</section><section class="panel list-panel"><div class="panel-head"><div><h2>Règlements saisis</h2><p>À rapprocher avec les justificatifs bancaires.</p></div></div>${moduleList(data.payments.map(x => moduleRow('€', x.invoiceRef, `${x.date} · ${x.method}`, `<strong>${money(x.amount)}</strong>`, x.id)), 'Aucun règlement saisi.')}</section>`;
 }
 
 function documentsPage() {
@@ -436,18 +449,18 @@ function documentsPage() {
     const subtitle = `${siteLabel(item)} · ${item.date || ''} · ${item.fileName || 'Photo'} · ${Math.ceil(Number(item.size || 0) / 1024)} Ko${item.archivedAt ? ` · Archivé ${new Date(item.archivedAt).toLocaleDateString('fr-FR')}` : ''}`;
     return auditedModuleRow(item.kind === 'photo' ? '▧' : '▱', item.name, subtitle, item.id);
   });
-  const auditRows = (data.auditLogs || []).filter(entry => entry.collection === 'documents').slice(0, 60).map(entry => `<li class="document-audit-row"><b>${esc(entry.recordName)}</b><span>${esc(entry.action)}</span><small>${esc(entry.actorName || 'Compte inconnu')}${entry.actorUsername ? ` (@${esc(entry.actorUsername)})` : ''} · ${esc(new Date(entry.occurredAt).toLocaleString('fr-FR'))}</small></li>`).join('');
+  const auditRows = (data.auditLogs || []).slice(0, 100).map(entry => `<li class="document-audit-row"><b>${esc(ACTIVITY_LABELS[entry.collection] || entry.collection || 'Élément')} · ${esc(entry.recordName)}</b><span>${esc(entry.action)}</span><small>${esc(entry.actorName || 'Compte local non identifié')}${entry.actorUsername ? ` (@${esc(entry.actorUsername)})` : ''} · ${esc(new Date(entry.occurredAt).toLocaleString('fr-FR'))}</small></li>`).join('');
   const tabs = `<div class="document-tabs" role="tablist" aria-label="Affichage des documents"><button role="tab" aria-selected="${active}" data-document-view="active">Actifs <span>${(data.documents || []).filter(item => !item.archivedAt).length}</span></button><button role="tab" aria-selected="${archived}" data-document-view="archived">Archives <span>${(data.documents || []).filter(item => item.archivedAt).length}</span></button><button role="tab" aria-selected="${documentsView === 'history'}" data-document-view="history">Historique</button></div>`;
-  const content = documentsView === 'history' ? `<section class="panel"><div class="panel-head"><div><h2>Qui a fait quoi ?</h2><p>Les 60 dernières actions s’affichent ici ; jusqu’à 2 000 événements sont conservés sur cet appareil.</p></div></div><ol class="document-audit-list">${auditRows || '<li class="empty-state">Aucune action depuis l’activation de l’historique.</li>'}</ol></section>` : `<section class="panel"><div class="panel-head"><div><h2>${active ? 'Documents disponibles' : 'Documents archivés'}</h2><p>${archived ? 'Restaurez un élément ou supprimez-le définitivement.' : 'Ouvrez une pièce pour la télécharger, la modifier ou l’archiver.'}</p></div><span class="pill neutral">${rows.length} élément(s)</span></div>${moduleList(rows, archived ? 'Aucun élément dans les archives.' : 'Aucun document ajouté.')}</section>`;
+  const content = documentsView === 'history' ? `<section class="panel"><div class="panel-head"><div><h2>Qui a fait quoi ?</h2><p>Les 100 dernières actions s’affichent ici ; jusqu’à 2 000 événements sont conservés sur cet appareil.</p></div></div><ol class="document-audit-list">${auditRows || '<li class="empty-state">Aucune action depuis l’activation de l’historique.</li>'}</ol></section>` : `<section class="panel"><div class="panel-head"><div><h2>${active ? 'Documents disponibles' : 'Documents archivés'}</h2><p>${archived ? 'Restaurez un élément ou supprimez-le définitivement.' : 'Ouvrez une pièce pour la télécharger, la modifier ou l’archiver.'}</p></div><span class="pill neutral">${rows.length} élément(s)</span></div>${moduleList(rows, archived ? 'Aucun élément dans les archives.' : 'Aucun document ajouté.')}</section>`;
   return `${heading('DOSSIERS', 'Documents', 'Retrouvez les pièces par chantier, consultez leur historique et gérez les archives.', active ? `<button class="btn primary" data-module-action="document">＋ Ajouter un document</button>` : '')}${localNotice}<div class="notice"><span class="notice-icon">ⓘ</span><span>Fichiers et photos restent sur cet appareil (700 Ko maximum pour les pièces jointes). Les profils locaux indiquent le compte utilisé, sans identité vérifiée par un serveur.</span></div>${tabs}${content}`;
 }
 
 function reportsPage() {
   const archived = documentsView === 'archived';
   const rows = (data.reports || []).filter(item => !!item.archivedAt === archived).map(item => auditedModuleRow('⌁', item.title, `${siteLabel(item)} · ${item.date} · ${item.kind} · brouillon local${item.archivedAt ? ' · Archivé' : ''}`, item.id));
-  const auditRows = (data.auditLogs || []).filter(entry => entry.collection === 'reports').slice(0, 60).map(entry => `<li class="document-audit-row"><b>${esc(entry.recordName)}</b><span>${esc(entry.action)}</span><small>${esc(entry.actorName || 'Compte inconnu')}${entry.actorUsername ? ` (@${esc(entry.actorUsername)})` : ''} · ${esc(new Date(entry.occurredAt).toLocaleString('fr-FR'))}</small></li>`).join('');
+  const auditRows = (data.auditLogs || []).slice(0, 100).map(entry => `<li class="document-audit-row"><b>${esc(ACTIVITY_LABELS[entry.collection] || entry.collection || 'Élément')} · ${esc(entry.recordName)}</b><span>${esc(entry.action)}</span><small>${esc(entry.actorName || 'Compte local non identifié')}${entry.actorUsername ? ` (@${esc(entry.actorUsername)})` : ''} · ${esc(new Date(entry.occurredAt).toLocaleString('fr-FR'))}</small></li>`).join('');
   const tabs = `<div class="document-tabs" role="tablist" aria-label="Affichage des rapports"><button role="tab" aria-selected="${!archived && documentsView !== 'history'}" data-document-view="active">Actifs <span>${(data.reports || []).filter(item => !item.archivedAt).length}</span></button><button role="tab" aria-selected="${archived}" data-document-view="archived">Archives <span>${(data.reports || []).filter(item => item.archivedAt).length}</span></button><button role="tab" aria-selected="${documentsView === 'history'}" data-document-view="history">Historique</button></div>`;
-  const content = documentsView === 'history' ? `<section class="panel"><div class="panel-head"><div><h2>Qui a fait quoi ?</h2><p>Les 60 dernières actions s’affichent ici ; jusqu’à 2 000 événements sont conservés sur cet appareil.</p></div></div><ol class="document-audit-list">${auditRows || '<li class="empty-state">Aucune action depuis l’activation de l’historique.</li>'}</ol></section>` : `<section class="panel"><div class="panel-head"><div><h2>${archived ? 'Rapports archivés' : 'Rapports disponibles'}</h2><p>${archived ? 'Restaurez un rapport ou supprimez-le définitivement.' : 'Ouvrez un rapport pour le modifier ou l’archiver.'}</p></div><span class="pill neutral">${rows.length} rapport(s)</span></div>${moduleList(rows, archived ? 'Aucun rapport dans les archives.' : 'Aucun rapport rédigé.')}</section>`;
+  const content = documentsView === 'history' ? `<section class="panel"><div class="panel-head"><div><h2>Qui a fait quoi ?</h2><p>Les 100 dernières actions s’affichent ici ; jusqu’à 2 000 événements sont conservés sur cet appareil.</p></div></div><ol class="document-audit-list">${auditRows || '<li class="empty-state">Aucune action depuis l’activation de l’historique.</li>'}</ol></section>` : `<section class="panel"><div class="panel-head"><div><h2>${archived ? 'Rapports archivés' : 'Rapports disponibles'}</h2><p>${archived ? 'Restaurez un rapport ou supprimez-le définitivement.' : 'Ouvrez un rapport pour le modifier ou l’archiver.'}</p></div><span class="pill neutral">${rows.length} rapport(s)</span></div>${moduleList(rows, archived ? 'Aucun rapport dans les archives.' : 'Aucun rapport rédigé.')}</section>`;
   return `${heading('QUALITÉ & SUIVI', 'Rapports', 'Rédigez et retrouvez les comptes rendus liés aux chantiers.', !archived && documentsView !== 'history' ? `<button class="btn primary" data-module-action="report">＋ Nouveau rapport</button>` : '')}${localNotice}${tabs}${content}`;
 }
 
@@ -542,7 +555,7 @@ setInterval(() => { if (document.visibilityState === 'visible') dispatchDueBrows
 
 function settingsPage() {
   let priorRestore = null; try { priorRestore = localStorage.getItem('ssp-pre-restore-backup-v1'); } catch { /* Le stockage local peut être indisponible. */ }
-  return `${heading('VOTRE ESPACE', 'Paramètres', 'Personnalisez les informations locales de l’entreprise.')} ${localNotice}<section class="panel settings-form"><form data-module-form="settings"><label>Nom de l’application<input name="appName" required maxlength="80" value="${esc(data.settings.appName)}"></label><label>Nom de l’entreprise<input name="companyName" required maxlength="120" value="${esc(data.settings.companyName)}"></label><div class="form-row"><label>Pays de référence<select name="country"><option value="FR" ${data.settings.country === 'FR' ? 'selected' : ''}>France</option><option value="CH" ${data.settings.country === 'CH' ? 'selected' : ''}>Suisse</option></select></label><label>Devise par défaut<select name="currency"><option value="EUR" ${data.settings.currency === 'EUR' ? 'selected' : ''}>EUR · Euro</option><option value="CHF" ${data.settings.currency === 'CHF' ? 'selected' : ''}>CHF · Franc suisse</option></select></label></div><p class="form-hint">Les règles fiscales ne sont pas calculées automatiquement par ce réglage.</p><button class="btn primary">Enregistrer</button></form></section><section class="panel"><div class="panel-head"><div><h2>Copie de sauvegarde locale</h2><p>Exportez puis restaurez une copie JSON de ce navigateur.</p></div><button class="btn secondary" data-module-action="export">Exporter mes données</button></div><label class="import-label">Restaurer une copie<input id="import-file" type="file" accept="application/json,.json"></label><p class="form-hint">Avant de remplacer les données, l’application conserve automatiquement une copie locale de l’état actuel. Téléchargez-la ci-dessous si vous voulez garder un fichier externe.</p>${priorRestore ? '<button class="btn secondary" data-module-action="export-restore-backup">Télécharger la copie précédant la restauration</button>' : ''}<p class="form-hint">Le fichier peut contenir des coordonnées personnelles ; conservez-le dans un endroit sûr.</p><button class="btn danger" data-module-action="clear">Effacer les données locales</button></section>`;
+  return `${heading('VOTRE ESPACE', 'Paramètres', 'Personnalisez les informations locales de l’entreprise.')} ${localNotice}<section class="panel settings-form"><form data-module-form="settings"><label>Nom de l’application<input name="appName" required maxlength="80" value="${esc(data.settings.appName)}"></label><label>Nom de l’entreprise<input name="companyName" required maxlength="120" value="${esc(data.settings.companyName)}"></label><div class="form-row"><label>Pays de référence<select name="country"><option value="FR" ${data.settings.country === 'FR' ? 'selected' : ''}>France</option><option value="CH" ${data.settings.country === 'CH' ? 'selected' : ''}>Suisse</option></select></label><label>Devise par défaut<select name="currency"><option value="EUR" ${data.settings.currency === 'EUR' ? 'selected' : ''}>EUR · Euro</option><option value="CHF" ${data.settings.currency === 'CHF' ? 'selected' : ''}>CHF · Franc suisse</option></select></label></div><label>Clé API Google Maps<input name="googleMapsApiKey" type="password" autocomplete="off" value="${esc(data.settings.googleMapsApiKey || '')}" placeholder="Collez votre clé API restreinte"></label><p class="form-hint">N’ajoutez ici qu’une clé limitée à Google Maps JavaScript API et Places API, avec restriction HTTP au domaine zargo69.github.io. Cette clé est enregistrée dans ce navigateur et devient visible dans le code chargé par celui-ci. La facturation Google doit être activée. Ne mettez pas une clé non restreinte dans ce champ.</p><p class="form-hint">Les règles fiscales ne sont pas calculées automatiquement par ce réglage.</p><button class="btn primary">Enregistrer</button></form></section><section class="panel"><div class="panel-head"><div><h2>Copie de sauvegarde locale</h2><p>Exportez puis restaurez une copie JSON de ce navigateur.</p></div><button class="btn secondary" data-module-action="export">Exporter mes données</button></div><label class="import-label">Restaurer une copie<input id="import-file" type="file" accept="application/json,.json"></label><p class="form-hint">Avant de remplacer les données, l’application conserve automatiquement une copie locale de l’état actuel. Téléchargez-la ci-dessous si vous voulez garder un fichier externe.</p>${priorRestore ? '<button class="btn secondary" data-module-action="export-restore-backup">Télécharger la copie précédant la restauration</button>' : ''}<p class="form-hint">Le fichier peut contenir des coordonnées personnelles ; conservez-le dans un endroit sûr.</p><button class="btn danger" data-module-action="clear">Effacer les données locales</button></section>`;
 }
 
 function moduleForm(type, title, content) {
@@ -616,7 +629,7 @@ function openPurchaseDetails(id) {
   if (!purchase) return;
   const { lines, ordered, received, remaining } = purchaseReceivedSummary(purchase);
   const rows = lines.map(line => { const stockItem = data.stockItems.find(item => item.id === line.stockItemId); return `<div class="purchase-detail-line"><span><b>${esc(line.description)}</b><small>${Number(line.receivedQuantity || 0)} / ${Number(line.quantity || 0)} ${esc(line.unit || 'unité')} reçue(s) · ${money(line.unitPriceHT || 0)} HT / unité · ${stockItem ? `stock : ${esc(stockItem.name)}` : 'hors catalogue de stock'}</small></span><strong>${money(Number(line.quantity || 0) * Number(line.unitPriceHT || 0))}</strong></div>`; }).join('');
-  const controls = `<div class="form-actions">${purchase.status === 'À valider' ? `<button class="btn primary" data-purchase-status="Commandée" data-id="${esc(id)}">Marquer commandée</button>` : ''}${['Commandée','Partiellement reçue'].includes(purchase.status) && remaining ? `<button class="btn primary" data-purchase-receive="${esc(id)}">Enregistrer une réception</button>` : ''}${!received && purchase.status !== 'Annulée' ? `<button class="btn danger" data-purchase-status="Annulée" data-id="${esc(id)}">Annuler la commande</button>` : ''}</div>`;
+  const controls = `<div class="form-actions">${purchase.status === 'À valider' ? `<button class="btn primary" data-purchase-status="Commandée" data-id="${esc(id)}">Marquer commandée</button>` : ''}${['Commandée','Partiellement reçue'].includes(purchase.status) && remaining ? `<button class="btn primary" data-purchase-receive="${esc(id)}">Enregistrer une réception</button>` : ''}${!received && purchase.status !== 'Annulée' ? `<button class="btn danger" data-purchase-status="Annulée" data-id="${esc(id)}">Annuler la commande</button>` : ''}${!received ? `<button class="btn danger" data-purchase-delete="${esc(id)}">Supprimer la commande</button>` : ''}</div>`;
   modal(`Commande ${purchase.reference}`, `<div class="detail-card"><p><b>Fournisseur</b><br>${esc(purchase.supplier)}</p><p><b>Chantier</b><br>${esc(siteLabel(purchase))}</p><p><b>Livraison prévue</b><br>${esc(purchase.delivery || 'Non renseignée')} · <span class="pill neutral">${esc(purchase.status)}</span></p>${rows ? `<div class="purchase-detail-lines"><div class="purchase-detail-head"><b>Articles</b><b>Total ligne HT</b></div>${rows}</div>` : '<p class="form-hint">Cette commande ancienne n’a pas de lignes détaillées. Son montant historique est conservé, mais les quantités ne peuvent pas être réceptionnées ligne par ligne.</p>'}<div class="purchase-total-row"><span>Montant HT indicatif</span><b>${money(purchase.amountHT || 0)}</b></div>${lines.length ? `<p class="form-hint">Quantité totale réceptionnée : ${received} / ${ordered} unités. La TVA, la facture fournisseur et le règlement restent à contrôler séparément.</p>` : ''}${controls}</div>`);
 }
 
@@ -697,8 +710,10 @@ function openModuleForm(type, selectedId = '') {
 function storeModuleForm(form, fileData = null) {
   const type = form.dataset.moduleForm;
   const values = Object.fromEntries(new FormData(form));
+  const previousMapsKey = String(data.settings?.googleMapsApiKey || '').trim();
   if (type === 'settings') {
-    data.settings = { ...data.settings, appName: values.appName.trim(), companyName: values.companyName.trim(), country: values.country, currency: values.currency };
+    data.settings = { ...data.settings, appName: values.appName.trim(), companyName: values.companyName.trim(), country: values.country, currency: values.currency, googleMapsApiKey: String(values.googleMapsApiKey || '').trim() };
+    window.__sspGoogleMapsLoad = null;
     applyBrandSettings();
   }
   if (type === 'supplier') {
@@ -794,6 +809,7 @@ function storeModuleForm(form, fileData = null) {
     recordDocumentAudit('reports', record, 'Modifié');
   }
   if (!save()) return;
+  if (type === 'settings' && previousMapsKey !== String(data.settings.googleMapsApiKey || '').trim()) { location.reload(); return; }
   clearFormDraft(form); closeModal(); render(); notify('Enregistré sur cet appareil.');
 }
 
@@ -838,6 +854,16 @@ document.addEventListener('submit', event => {
 document.addEventListener('click', event => {
   const documentView = event.target.closest('[data-document-view]');
   if (documentView) { documentsView = documentView.dataset.documentView; render(); return; }
+  const deletePurchase = event.target.closest('[data-purchase-delete]');
+  if (deletePurchase) {
+    const purchase = data.purchases.find(item => item.id === deletePurchase.dataset.purchaseDelete);
+    if (!purchase) return;
+    if (purchaseReceivedSummary(purchase).received > 0) return notify('Une commande avec réception ne peut pas être supprimée ; gardez sa trace et documentez un retour.');
+    if (!confirm(`Supprimer définitivement la commande « ${purchase.reference} » non réceptionnée ?`)) return;
+    const previous = data.purchases; data.purchases = previous.filter(item => item.id !== purchase.id);
+    if (save()) { closeModal(); render(); notify('Commande supprimée et action inscrite dans l’historique.'); } else data.purchases = previous;
+    return;
+  }
   const receiveButton = event.target.closest('[data-purchase-receive]');
   if (receiveButton) { openPurchaseReceiptForm(receiveButton.dataset.purchaseReceive); return; }
   const statusButton = event.target.closest('[data-purchase-status]');
@@ -887,6 +913,12 @@ document.addEventListener('click', event => {
     if (invoiceAction.dataset.invoiceAction === 'print') return openInvoicePrint(id);
     if (invoiceAction.dataset.invoiceAction === 'print-now') return window.print();
     if (invoiceAction.dataset.invoiceAction === 'back') return openInvoiceDetails(id);
+    if (invoiceAction.dataset.invoiceAction === 'delete' && invoice) {
+      if (data.payments.some(payment => payment.invoiceId === id)) return notify('Supprimez ou corrigez d’abord les règlements rattachés.');
+      if (!confirm(`Supprimer définitivement la facture brouillon « ${invoice.reference} » ?`)) return;
+      const old = data.invoices; data.invoices = old.filter(item => item.id !== id); if (!save()) { data.invoices = old; return; }
+      closeModal(); render(); notify('Facture brouillon supprimée et suppression inscrite dans l’historique.'); return;
+    }
     if (invoiceAction.dataset.invoiceAction === 'payment' && invoice) {
       openModuleForm('payment', id);
       const paymentForm = document.querySelector('[data-module-form="payment"]');
@@ -925,6 +957,8 @@ document.addEventListener('click', event => {
     openAuditedRecord('reports', report);
     return;
   }
+  const payment = data.payments.find(x => x.id === id);
+  if (payment && confirm(`Supprimer le règlement saisi de ${money(payment.amount)} pour « ${payment.invoiceRef} » ?`)) { const previous = data.payments; data.payments = previous.filter(x => x.id !== id); if (save()) render(); else data.payments = previous; return; }
   const expense = data.expenses.find(x => x.id === id);
   if (expense && confirm(`Supprimer la dépense « ${expense.label} » ?`)) { const previous = data.expenses; data.expenses = previous.filter(x => x.id !== id); if (save()) render(); else data.expenses = previous; return; }
 });
@@ -934,7 +968,6 @@ document.addEventListener('click', event => {
   if (!button) return;
   event.preventDefault();
   if (button.dataset.mapAction === 'load') {
-    if (!sitesWithCoordinates().length) return notify('Renseignez les coordonnées GPS d’au moins un chantier.');
     if (sessionStorage.getItem('ssp-map-consent') === '1') return initializeSiteMap();
     return showMapConsent();
   }
@@ -942,6 +975,11 @@ document.addEventListener('click', event => {
   if (button.dataset.mapAction === 'confirm-load') {
     sessionStorage.setItem('ssp-map-consent', '1'); closeModal(); return initializeSiteMap();
   }
+});
+
+document.addEventListener('click', event => {
+  const openSiteLink = event.target.closest('[data-open-site]');
+  if (openSiteLink) { event.preventDefault(); const id = openSiteLink.dataset.openSite; route('chantiers'); showSite(id); }
 });
 
 document.addEventListener('input', event => {
@@ -1012,7 +1050,7 @@ function clientsPage() {
       const status = prospect.convertedAt ? 'Converti en client' : prospect.status || 'Nouveau';
       return `<article class="client-card prospect-card"><div class="client-card-head"><span class="client-avatar">${initials(prospect.name || '?')}</span><span class="pill neutral">${esc(status)}</span></div><h3>${esc(prospect.name)}</h3><p class="client-city">⌖ ${esc(prospect.city || 'Ville non renseignée')}</p><div class="client-contact"><span>✉</span>${esc(prospect.email || 'E-mail non renseigné')}</div><div class="client-contact"><span>♧</span>${esc(prospect.phone || 'Téléphone non renseigné')}</div><p class="prospect-followup">${next ? `Relance ${esc(next.dueDate)} · ${esc(next.note || next.title)}` : prospect.nextFollowup ? `À recontacter le ${esc(prospect.nextFollowup)}` : 'Aucune relance planifiée'}</p><div class="prospect-actions"><button class="btn secondary" data-crm-action="open-prospect" data-id="${esc(prospect.id)}">Voir la fiche</button>${prospect.convertedAt ? `<button class="btn secondary" data-client="${esc(prospect.clientId)}">Ouvrir le client</button>` : `<button class="btn primary" data-crm-action="convert-prospect" data-id="${esc(prospect.id)}">Convertir en client</button>`}</div></article>`;
     }).join('');
-    return `${heading('RELATION CLIENT', 'Clients & prospects', 'Suivez les contacts, les occasions et les relances au même endroit.', `<button class="btn secondary" data-action="add-client">＋ Nouveau client</button> <button class="btn primary" data-crm-action="new-prospect">＋ Nouveau prospect</button>`)}${tabs}<div class="toolbar"><label class="search list-search"><span>⌕</span><input id="prospect-search" placeholder="Rechercher un prospect"></label><span class="toolbar-count">${prospects.length} fiche(s)</span></div>${openFollowups.length ? `<section class="panel crm-followups"><div class="panel-head"><div><h2>Relances à faire</h2><p>Rappels locaux dans cette démonstration, sans notification externe.</p></div><span class="pill neutral">${openFollowups.length}</span></div>${openFollowups.map(item => { const prospect = prospects.find(x => x.id === item.entityId); const client = data.clients.find(x => x.id === item.entityId); return `<div class="crm-followup-row"><span><b>${esc(item.title)}</b><small>${esc(item.dueDate || 'Date non définie')} · ${esc(prospect?.name || client?.name || 'Contact')}</small></span><button class="btn secondary" data-crm-action="complete-followup" data-id="${esc(item.id)}">Marquer fait</button></div>`; }).join('')}</section>` : ''}<div class="client-grid prospect-grid">${rows || `<div class="panel">${empty('Aucun prospect enregistré.','new-prospect','Ajouter un prospect')}</div>`}</div>`;
+    return `${heading('RELATION CLIENT', 'Clients & prospects', 'Suivez les contacts, les occasions et les relances au même endroit.', `<button class="btn secondary" data-action="add-client">＋ Nouveau client</button> <button class="btn primary" data-crm-action="new-prospect">＋ Nouveau prospect</button>`)}${tabs}<div class="toolbar"><label class="search list-search"><span>⌕</span><input id="prospect-search" placeholder="Rechercher un prospect"></label><span class="toolbar-count">${prospects.length} fiche(s)</span></div>${openFollowups.length ? `<section class="panel crm-followups"><div class="panel-head"><div><h2>Relances à faire</h2><p>Rappels locaux dans cette démonstration, sans notification externe.</p></div><span class="pill neutral">${openFollowups.length}</span></div>${openFollowups.map(item => { const prospect = prospects.find(x => x.id === item.entityId); const client = data.clients.find(x => x.id === item.entityId); return `<div class="crm-followup-row"><span><b>${esc(item.title)}</b><small>${esc(item.dueDate || 'Date non définie')} · ${esc(prospect?.name || client?.name || 'Contact')}</small></span><span class="crm-followup-actions"><button class="btn secondary" data-crm-action="complete-followup" data-id="${esc(item.id)}">Marquer fait</button><button class="btn danger" data-crm-action="delete-followup" data-id="${esc(item.id)}">Supprimer</button></span></div>`; }).join('')}</section>` : ''}<div class="client-grid prospect-grid">${rows || `<div class="panel">${empty('Aucun prospect enregistré.','new-prospect','Ajouter un prospect')}</div>`}</div>`;
   }
   return `${heading('RELATION CLIENT', 'Clients & prospects', 'Retrouvez les clients et transformez vos opportunités sans ressaisir leurs coordonnées.', `<button class="btn secondary" data-crm-action="new-prospect">＋ Nouveau prospect</button> <button class="btn primary" data-action="add-client">＋ Nouveau client</button>`)}${tabs}<div class="toolbar"><label class="search list-search"><span>⌕</span><input id="client-search" placeholder="Rechercher un client"></label><span class="toolbar-count">${clients.length} client(s)</span></div><div class="client-grid">${clients.map(client => `<article class="client-card"><div class="client-card-head"><span class="client-avatar">${initials(client.name)}</span><span class="pill neutral">${esc(client.type || 'Client')}</span><button class="more-button" data-client-menu="${esc(client.id)}">···</button></div><h3>${esc(client.name)}</h3><p class="client-city">⌖ ${esc(client.city || 'Ville non renseignée')}</p><div class="client-contact"><span>✉</span>${esc(client.email || 'E-mail non renseigné')}</div><div class="client-contact"><span>♧</span>${esc(client.phone || 'Téléphone non renseigné')}</div><div class="client-card-foot"><span>${data.sites.filter(site => site.client === client.name).length} chantier(s)</span><button data-client="${esc(client.id)}">Ouvrir la fiche →</button></div></article>`).join('') || `<div class="panel">${empty('Aucun client enregistré.','add-client','Ajouter un client')}</div>`}</div>`;
 }
@@ -1042,7 +1080,7 @@ function persistProspect(candidate) {
 }
 
 function persistClient(candidate, sourceProspect = null) {
-  const client = { id: newId(), name: candidate.name.trim(), type: candidate.type || 'Professionnel', city: candidate.city || '', email: candidate.email || '', phone: candidate.phone || '', origin: candidate.origin || '', notes: candidate.need || candidate.notes || '', sourceProspectId: sourceProspect?.id || '' };
+  const client = { id: newId(), name: candidate.name.trim(), type: candidate.type || 'Professionnel', city: candidate.city || '', address: candidate.address || '', postalCode: candidate.postalCode || '', latitude: candidate.latitude === '' ? '' : Number(candidate.latitude) || '', longitude: candidate.longitude === '' ? '' : Number(candidate.longitude) || '', email: candidate.email || '', phone: candidate.phone || '', origin: candidate.origin || '', notes: candidate.need || candidate.notes || '', sourceProspectId: sourceProspect?.id || '' };
   data.clients.unshift(client);
   if (sourceProspect) {
     sourceProspect.convertedAt = new Date().toISOString(); sourceProspect.clientId = client.id; sourceProspect.status = 'Converti';
@@ -1065,7 +1103,7 @@ function convertProspect(prospect, existingClient = null) {
 function showProspect(prospect) {
   const client = data.clients.find(item => item.id === prospect.clientId);
   const followups = (data.followups || []).filter(item => item.entityId === prospect.id || item.entityId === prospect.clientId);
-  modal(prospect.name, `<div class="detail-card"><span class="pill neutral">${esc(prospect.convertedAt ? 'Converti en client' : prospect.status || 'Nouveau')}</span><p><b>Type</b><br>${esc(prospect.type || 'Non précisé')}</p><p><b>Ville</b><br>${esc(prospect.city || 'Non renseignée')}</p><p><b>E-mail</b><br>${esc(prospect.email || 'Non renseigné')}</p><p><b>Téléphone</b><br>${esc(prospect.phone || 'Non renseigné')}</p><p><b>Origine</b><br>${esc(prospect.origin || 'Non renseignée')}</p><p><b>Besoin</b><br>${esc(prospect.need || 'Non renseigné')}</p>${client ? `<p><b>Fiche client liée</b><br>${esc(client.name)}</p>` : ''}<label>Étape commerciale<select id="prospect-stage" ${prospect.convertedAt ? 'disabled' : ''}>${['Nouveau','À contacter','Devis à préparer','En attente','Perdu'].map(status => `<option ${prospect.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select></label><p><b>Relances</b><br>${followups.map(item => `${esc(item.dueDate || 'Sans date')} · ${esc(item.note || item.title)} (${esc(item.status)})`).join('<br>') || 'Aucune relance planifiée'}</p><div class="form-actions">${prospect.convertedAt ? '' : `<button class="btn secondary" data-crm-action="add-followup" data-id="${esc(prospect.id)}">Planifier une relance</button><button class="btn primary" data-crm-action="convert-prospect" data-id="${esc(prospect.id)}">Convertir en client</button>`}</div></div>`);
+  modal(prospect.name, `<div class="detail-card"><span class="pill neutral">${esc(prospect.convertedAt ? 'Converti en client' : prospect.status || 'Nouveau')}</span><p><b>Type</b><br>${esc(prospect.type || 'Non précisé')}</p><p><b>Ville</b><br>${esc(prospect.city || 'Non renseignée')}</p><p><b>E-mail</b><br>${esc(prospect.email || 'Non renseigné')}</p><p><b>Téléphone</b><br>${esc(prospect.phone || 'Non renseigné')}</p><p><b>Origine</b><br>${esc(prospect.origin || 'Non renseignée')}</p><p><b>Besoin</b><br>${esc(prospect.need || 'Non renseigné')}</p>${client ? `<p><b>Fiche client liée</b><br>${esc(client.name)}</p>` : ''}<label>Étape commerciale<select id="prospect-stage" ${prospect.convertedAt ? 'disabled' : ''}>${['Nouveau','À contacter','Devis à préparer','En attente','Perdu'].map(status => `<option ${prospect.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select></label><p><b>Relances</b><br>${followups.map(item => `${esc(item.dueDate || 'Sans date')} · ${esc(item.note || item.title)} (${esc(item.status)})`).join('<br>') || 'Aucune relance planifiée'}</p><div class="form-actions">${prospect.convertedAt ? '' : `<button class="btn secondary" data-crm-action="add-followup" data-id="${esc(prospect.id)}">Planifier une relance</button><button class="btn primary" data-crm-action="convert-prospect" data-id="${esc(prospect.id)}">Convertir en client</button><button class="btn danger" data-crm-action="delete-prospect" data-id="${esc(prospect.id)}">Supprimer le prospect</button>`}</div></div>`);
   const stage = $('#prospect-stage');
   stage?.addEventListener('change', () => { const previous = prospect.status; prospect.status = stage.value; if (save()) notify('Étape mise à jour sur cet appareil.'); else stage.value = previous; });
 }
@@ -1086,15 +1124,33 @@ function showClient(id) {
   const fieldNames = { name: 'Autre nom', type: 'Autre type', city: 'Autre ville', email: 'Autre e-mail', phone: 'Autre téléphone', origin: 'Autre origine', notes: 'Autre note' };
   const alternateValues = Object.entries(client.alternateValues || {}).flatMap(([field, values]) => (values || []).map(value => `<p><b>${esc(fieldNames[field] || field)}</b><br>${esc(value)}</p>`)).join('');
   const mergeHistory = (client.mergeHistory || []).map(item => `<li>${esc(new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(new Date(item.mergedAt)))} · coordonnées rapprochées de « ${esc(item.incomingName)} » ; ${item.conflictFields?.length || 0} valeur(s) différente(s) conservée(s).</li>`).join('');
-  modal(client.name, `<div class="detail-card"><span class="pill neutral">${esc(client.type || 'Client')}</span><p><b>Ville</b><br>${esc(client.city || 'Non renseignée')}</p><p><b>E-mail</b><br>${esc(client.email || 'Non renseigné')}</p><p><b>Téléphone</b><br>${esc(client.phone || 'Non renseigné')}</p><p><b>Chantiers</b><br>${sites.map(site => esc(site.name)).join(', ') || 'Aucun chantier'}</p><p><b>Devis</b><br>${quotes.map(quote => `${esc(quote.title)} · ${esc(quote.status)} · ${money(quote.amountTTC ?? quote.amount)}`).join('<br>') || 'Aucun devis'}</p><p><b>Factures brouillon</b><br>${invoices.map(invoice => `${esc(invoice.reference)} · ${money(invoice.amountTTC)}`).join('<br>') || 'Aucune facture'}</p><p><b>Prospects associés</b><br>${sourceProspects.map(prospect => esc(prospect.name)).join(', ') || 'Aucun'}</p>${followups.length ? `<p><b>Relances</b><br>${followups.map(item => `${esc(item.dueDate || 'Sans date')} · ${esc(item.note || item.title)} (${esc(item.status)})`).join('<br>')}</p>` : ''}${alternateValues ? `<section class="crm-alternates"><h3>Autres coordonnées conservées</h3>${alternateValues}</section>` : ''}${mergeHistory ? `<section class="crm-alternates"><h3>Historique des rapprochements</h3><ul>${mergeHistory}</ul></section>` : ''}</div>`);
+  modal(client.name, `<div class="detail-card"><span class="pill neutral">${esc(client.type || 'Client')}</span><p><b>Adresse</b><br>${esc([client.address, client.postalCode, client.city].filter(Boolean).join(', ') || 'Non renseignée')}</p><p><b>E-mail</b><br>${esc(client.email || 'Non renseigné')}</p><p><b>Téléphone</b><br>${esc(client.phone || 'Non renseigné')}</p><p><b>Chantiers</b><br>${sites.map(site => esc(site.name)).join(', ') || 'Aucun chantier'}</p><p><b>Devis</b><br>${quotes.map(quote => `${esc(quote.title)} · ${esc(quote.status)} · ${money(quote.amountTTC ?? quote.amount)}`).join('<br>') || 'Aucun devis'}</p><p><b>Factures brouillon</b><br>${invoices.map(invoice => `${esc(invoice.reference)} · ${money(invoice.amountTTC)}`).join('<br>') || 'Aucune facture'}</p><p><b>Prospects associés</b><br>${sourceProspects.map(prospect => esc(prospect.name)).join(', ') || 'Aucun'}</p>${followups.length ? `<p><b>Relances</b><br>${followups.map(item => `${esc(item.dueDate || 'Sans date')} · ${esc(item.note || item.title)} (${esc(item.status)})`).join('<br>')}</p>` : ''}${alternateValues ? `<section class="crm-alternates"><h3>Autres coordonnées conservées</h3>${alternateValues}</section>` : ''}${mergeHistory ? `<section class="crm-alternates"><h3>Historique des rapprochements</h3><ul>${mergeHistory}</ul></section>` : ''}<div class="form-actions"><button class="btn secondary" data-client-action="edit" data-id="${esc(client.id)}">Modifier le client</button><button class="btn danger" data-client-action="delete" data-id="${esc(client.id)}">Supprimer le client</button></div></div>`);
+}
+
+function openClientEdit(id) {
+  const client = data.clients.find(item => item.id === id); if (!client) return;
+  modal(`Modifier · ${client.name}`, `<form data-form="client-edit" data-id="${esc(id)}"><label>Nom du client<input name="name" required maxlength="160" value="${esc(client.name)}"></label><div class="form-row"><label>Type<select name="type">${['Professionnel','Particulier','Syndic','Collectivité'].map(type => `<option ${client.type === type ? 'selected' : ''}>${type}</option>`).join('')}</select></label><label>Ville<input name="city" maxlength="100" value="${esc(client.city || '')}"></label></div><label>Adresse complète<input name="address" maxlength="240" value="${esc(client.address || '')}" autocomplete="street-address"></label><div class="form-row"><label>E-mail<input name="email" type="email" maxlength="180" value="${esc(client.email || '')}"></label><label>Téléphone<input name="phone" type="tel" maxlength="40" value="${esc(client.phone || '')}"></label></div><input type="hidden" name="latitude" value="${esc(client.latitude ?? '')}"><input type="hidden" name="postalCode" value="${esc(client.postalCode || '')}"><input type="hidden" name="longitude" value="${esc(client.longitude ?? '')}"><div class="form-actions"><button type="button" class="btn secondary cancel">Annuler</button><button class="btn primary">Enregistrer les modifications</button></div></form>`);
+  $('.cancel').onclick = () => showClient(id);
 }
 
 document.addEventListener('submit', event => {
   const clientForm = event.target.closest('[data-form="client"]');
+  const clientEditForm = event.target.closest('[data-form="client-edit"]');
   const crmForm = event.target.closest('[data-crm-form]');
-  if (!clientForm && !crmForm) return;
+  if (!clientForm && !clientEditForm && !crmForm) return;
   event.preventDefault(); event.stopImmediatePropagation();
   const values = Object.fromEntries(new FormData(event.target));
+  if (clientEditForm) {
+    const client = data.clients.find(item => item.id === clientEditForm.dataset.id);
+    if (!client) return notify('Cette fiche client n’existe plus.');
+    const nextName = String(values.name || '').trim();
+    if (!nextName) return notify('Le nom du client est obligatoire.');
+    const previous = { ...client };
+    Object.assign(client, { name: nextName, type: values.type, city: values.city, address: values.address, email: values.email, phone: values.phone, postalCode: values.postalCode || '', latitude: values.latitude === '' ? '' : Number(values.latitude), longitude: values.longitude === '' ? '' : Number(values.longitude) });
+    for (const site of data.sites) if (site.client === previous.name) site.client = nextName;
+    for (const collection of ['quotes','invoices','prospects']) for (const item of data[collection] || []) if (item.client === previous.name) item.client = nextName;
+    if (!save()) return; closeModal(); render(); notify('Fiche client modifiée et action inscrite dans l’historique.'); return;
+  }
   if (clientForm) {
     const candidate = { ...values, name: String(values.name || '').trim(), email: String(values.email || '').trim(), phone: String(values.phone || '').trim() };
     const matches = crmContactMatches(candidate);
@@ -1123,6 +1179,18 @@ document.addEventListener('input', event => {
 });
 
 document.addEventListener('click', event => {
+  const clientAction = event.target.closest('[data-client-action]');
+  if (clientAction) {
+    const client = data.clients.find(item => item.id === clientAction.dataset.id); if (!client) return;
+    if (clientAction.dataset.clientAction === 'edit') return openClientEdit(client.id);
+    if (clientAction.dataset.clientAction === 'delete') {
+      const referenced = data.sites.some(item => item.client === client.name) || data.quotes.some(item => item.client === client.name) || data.invoices.some(item => item.client === client.name) || (data.prospects || []).some(item => item.clientId === client.id || item.id === client.sourceProspectId) || (data.followups || []).some(item => item.entityType === 'client' && item.entityId === client.id);
+      if (referenced) return notify('Ce client est lié à un chantier, un devis, une facture ou un prospect. Supprimez ou rattachez ces éléments avant de supprimer sa fiche.');
+      if (!confirm(`Supprimer définitivement la fiche client « ${client.name} » ?`)) return;
+      const previous = data.clients; data.clients = previous.filter(item => item.id !== client.id); if (!save()) { data.clients = previous; return; }
+      closeModal(); render(); notify('Fiche client supprimée et action inscrite dans l’historique.'); return;
+    }
+  }
   const viewButton = event.target.closest('[data-crm-view]');
   if (viewButton) { crmView = viewButton.dataset.crmView; render(); return; }
   const button = event.target.closest('[data-crm-action]');
@@ -1161,6 +1229,23 @@ document.addEventListener('click', event => {
     return;
   }
   if (action === 'cancel-duplicate') { pendingCrmDraft = null; return closeModal(); }
+  if (action === 'delete-followup') {
+    const followup = (data.followups || []).find(item => item.id === button.dataset.id);
+    if (!followup) return;
+    if (!confirm(`Supprimer la relance « ${followup.note || followup.title} » ?`)) return;
+    const previous = data.followups; data.followups = previous.filter(item => item.id !== followup.id);
+    if (save()) { render(); notify('Relance supprimée et action inscrite dans l’historique.'); } else data.followups = previous;
+    return;
+  }
+  if (action === 'delete-prospect') {
+    if (!prospect || prospect.convertedAt) return notify('Un prospect converti doit être géré depuis sa fiche client.');
+    if (!confirm(`Supprimer définitivement le prospect « ${prospect.name} » et ses relances ?`)) return;
+    const oldProspects = data.prospects, oldFollowups = data.followups;
+    data.prospects = oldProspects.filter(item => item.id !== prospect.id);
+    data.followups = oldFollowups.filter(item => !(item.entityType === 'prospect' && item.entityId === prospect.id));
+    if (save()) { closeModal(); render(); notify('Prospect et relances supprimés et inscrits dans l’historique.'); } else { data.prospects = oldProspects; data.followups = oldFollowups; }
+    return;
+  }
   if (action === 'complete-followup') {
     const followup = (data.followups || []).find(item => item.id === button.dataset.id);
     if (followup) { followup.status = 'Fait'; followup.completedAt = new Date().toISOString(); if (save()) { render(); notify('Relance marquée comme faite.'); } }
@@ -1179,7 +1264,7 @@ function collectGlobalSearchRows(query) {
   const add = (kind, record, title, subtitle, searchText, icon) => {
     if (normalizeGlobalSearch(searchText).includes(query)) rows.push({ kind, id: record.id, title, subtitle, icon });
   };
-  for (const item of data.clients || []) add('client', item, item.name, [item.type, item.city, item.email, item.phone].filter(Boolean).join(' · '), [item.name, item.type, item.city, item.email, item.phone, ...(Object.values(item.alternateValues || {}).flat())].join(' '), '♙');
+  for (const item of data.clients || []) add('client', item, item.name, [item.type, item.city, item.email, item.phone].filter(Boolean).join(' · '), [item.name, item.type, item.city, item.address, item.email, item.phone, ...(Object.values(item.alternateValues || {}).flat())].join(' '), '♙');
   for (const item of data.prospects || []) if (!item.convertedAt) add('prospect', item, item.name, [item.status, item.city, item.email, item.phone, item.need].filter(Boolean).join(' · '), [item.name, item.status, item.city, item.email, item.phone, item.need, item.origin].join(' '), '◉');
   for (const item of data.sites || []) add('site', item, item.name, [item.client, item.status, item.address].filter(Boolean).join(' · '), [item.name, item.client, item.status, item.address, item.reference].join(' '), '⌖');
   for (const item of data.quotes || []) add('quote', item, item.title, `${item.client || ''} · ${item.status || 'Brouillon'} · ${item.id}`, [item.title, item.client, item.status, item.id].join(' '), '▤');
