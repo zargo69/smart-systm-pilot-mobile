@@ -1,6 +1,6 @@
 # Smart syst’m Pilot
 
-Application web progressive en français, pensée pour téléphone, tablette et ordinateur. Elle contient des parcours locaux de démonstration et un socle de préparation serveur. Elle n’est pas un service de gestion de production : les dossiers restent dans le navigateur et aucune synchronisation n’est configurée. Une recherche d’adresse transmet la requête à Nominatim ; l’affichage de la carte transmet la zone consultée à OpenFreeMap après action de l’utilisateur.
+Application web progressive en français, pensée pour téléphone, tablette et ordinateur. Elle contient des parcours locaux de démonstration et un socle de préparation serveur. Elle n’est pas un service de gestion de production : les dossiers restent dans le navigateur et aucune synchronisation n’est configurée. Une recherche d’adresse transmet la requête à Nominatim ; l’affichage transmet la zone consultée au fournisseur du fond choisi (OpenFreeMap ou IGN) après action de l’utilisateur.
 
 ## Ouvrir l’application
 
@@ -20,7 +20,7 @@ L’interface reprend les couleurs de marque du logo : bleu cobalt, indigo et ja
 
 ## Parcours disponibles
 
-- Accueil de pilotage : bloc « Ma journée » rassemble les interventions et tâches du jour ou en retard, avec des accès directs aux actions les plus courantes. Les filtres par période, chantier, client, intervenant et type de rappel restent disponibles. Les cartes distinguent les devis à suivre et acceptés des règlements saisis, achats engagés, dépenses payées et heures pointées. Les échéances à venir et chantiers actifs sont dérivés des enregistrements locaux ; aucun chiffre bancaire ou de trésorerie n’est simulé.
+- Accueil de pilotage : résumé des chantiers actifs, interventions à venir, devis à suivre et factures brouillon, tous calculés depuis les éléments enregistrés sur cet appareil. Un espace de démarrage guide la création du premier client, chantier ou devis, sans données fictives. Aucun chiffre bancaire ou de trésorerie n’est simulé.
 - CRM local : clients et prospects, origine et besoin du prospect, étape commerciale, relances datées, détection de doublons probables et conversion sans ressaisie. Une fusion déclenchée par l’utilisateur complète les champs vides et conserve les valeurs différentes dans la fiche client avec un historique local.
 - Recherche globale locale : clients, prospects, chantiers, devis, factures brouillon, commandes, interventions, documents, rapports, tâches et articles de stock. Les résultats ouvrent la fiche ou l’écran correspondant ; le raccourci `⌘ K`/`Ctrl K` fonctionne sur ordinateur.
 - Chantiers : création, recherche, consultation et modification locale.
@@ -35,7 +35,7 @@ L’interface reprend les couleurs de marque du logo : bleu cobalt, indigo et ja
 - Paramètres : nom de l’entreprise, nom de l’application, pays et devise. Aucune clé API de cartographie ni compte Google n’est nécessaire.
 - Données : export JSON et restauration locale. Le fichier exporté peut contenir des coordonnées personnelles ; protégez-le.
 - Profils locaux : création initiale d’un responsable, connexion par identifiant ou e-mail, gestion des profils membres et réinitialisation locale du mot de passe à partir de l’e-mail enregistré. Aucun message de récupération n’est envoyé ni vérifié. Les profils ne compartimentent pas les données et le verrou ne remplace pas des rôles serveur.
-- Carte et adresses : fond vectoriel OpenFreeMap via MapLibre GL JS, sans compte ni clé API. OpenFreeMap déclare son instance publique gratuite, sans quota publié et accessible à un usage commercial, mais sans garantie de disponibilité ; consultez ses [conditions](https://openfreemap.org/tos/). La recherche d’adresse utilise Nominatim manuellement, au clic (pas d’autocomplétion), avec résultats mis en cache localement ; la politique limite les requêtes à une par seconde pour l’application. Consultez la [politique Nominatim](https://operations.osmfoundation.org/policies/nominatim/) et le [guide gratuit](carte-gratuite.md).
+- Carte et adresses : plan de rue OpenFreeMap et, en France, orthophotographies IGN BD ORTHO par WMTS, sans compte ni clé API. Les photographies aériennes IGN sont en haute résolution, leur date de prise de vue varie selon le territoire, et leur réutilisation est sous Licence Ouverte Etalab 2.0. Ce n’est pas une imagerie satellite récente. La zone consultée est envoyée au fournisseur choisi ; les noms et détails métier restent locaux. Recherche Nominatim manuelle au clic avec cache local et limite d’une requête par seconde. Consultez le [guide carte et adresses](carte-gratuite.md).
 - Rappels locaux : l’icône en haut liste les relances, tâches, interventions, échéances de factures impayées et livraisons prévues jusqu’à sept jours. Les notifications système peuvent être activées séparément ; elles ne fonctionnent que lorsque l’application est ouverte et que le navigateur les prend en charge.
 - Actualisation locale entre onglets : une modification enregistrée dans un autre onglet du même navigateur et de la même adresse actualise la vue ouverte. Ce n’est pas une synchronisation entre appareils ni une sauvegarde distante.
 - Assistant de pilotage : contrôles locaux par règles simples (devis à suivre, échéances renseignées, budgets saisis, interventions proches, prix manquants et GPS absent). Ce n’est pas une IA générative et aucune donnée n’est transmise.
@@ -53,18 +53,9 @@ Les documents restent des brouillons locaux : la signature tracée est une image
 
 La carte et la recherche d’adresse requièrent Internet et dépendent de services publics qui peuvent évoluer ou être indisponibles ; elles ne sont pas hors connexion. L’optimisation d’itinéraire, les contrats de maintenance, les tournées, l’IA connectée et les intégrations comptables/fournisseurs ne sont pas actifs. L’assistant de pilotage repose sur des règles locales et n’est pas un modèle IA. Les notifications système se limitent aux rappels du jour quand l’application est ouverte ; aucune livraison en arrière-plan n’est garantie. La recherche globale et le centre de rappels interrogent uniquement les données de ce navigateur. Le catalogue, l’historique de mouvements de stock et les heures réelles restent locaux. Les calculs de TVA ne confirment pas l’éligibilité à un taux. Le calcul fiscal suisse est bloqué dans le devis.
 
-## État de vérification
+## Dernier contrôle
 
-Le 7 novembre 2026, les fichiers JavaScript modifiés pour cette mise à jour (modules, authentification, devis, opérations, service worker) ont passé un contrôle de syntaxe. Les changements d’adresse et de carte OpenStreetMap ne sont pas encore testés en conditions réelles. Les contrôles fonctionnels décrits plus haut concernent la version précédente et ne valident pas ces nouveaux parcours. L’iPhone réel n’a pas été validé. Ces vérifications ne prouvent pas l’IA connectée, les accès serveur, la restauration distante, la synchronisation entre appareils, la sécurité ou la conformité.
+Le 8 novembre 2026, les cinq scripts JavaScript principaux ont passé un contrôle de syntaxe après la réparation de l’accueil et le remplacement de l’imagerie 2016 par la couche aérienne IGN BD ORTHO en France. Les fichiers d’aide et les limites cartographiques ont été actualisés. Le rendu réel des tuiles IGN, le parcours complet en navigateur après publication et l’affichage sur un iPhone à 390 px restent à vérifier. L’application ne fournit toujours ni comptes serveur, ni synchronisation entre appareils, ni sauvegarde distante, ni IA connectée.
 
-Le schéma PostgreSQL et ses tests pgTAP sont des préparatifs non exécutés : aucun serveur PostgreSQL/Supabase n’est disponible dans cet espace. Le backend, l’hébergement, les comptes et les intégrations ne sont donc pas activés.
+Pour les étapes détaillées, consultez le [guide utilisateur](guide-utilisateur.md) et le [guide carte et adresses](carte-gratuite.md).
 
-## Documents techniques
-
-- [Guide utilisateur](guide-utilisateur.md)
-- [Cadrage produit, benchmark sourcé, maquettes et architecture](cadrage-phase-0.md)
-- [État réel et limites](etat-et-limites.md)
-- [Audit du prompt maître et des scénarios QA](audit-prompt-maitre.md)
-- [Guide de préparation du backend](backend/README.md)
-- [Migration PostgreSQL/Supabase initiale](backend/supabase/migrations/202610250001_core.sql)
-- [Tests pgTAP préparés](backend/supabase/tests/rls_core.test.sql)
