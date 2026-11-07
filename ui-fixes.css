@@ -523,3 +523,6 @@
 .address-search-option:hover, .address-search-option:focus-visible { border-color: #3867d6; background: #f3f6ff; outline: 2px solid #3867d633; }
 .address-search-results:empty { display: none; }
 .map-popup-open { display: inline-block; margin-top: 6px; border: 0; background: none; color: #3157b7; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.address-provider-settings { margin: 16px 0; border-top: 1px solid #e1e8eb; padding-top: 12px; }
+.address-provider-settings summary { color: #3157b7; font-weight: 700; cursor: pointer; }
+.address-provider-settings label { margin-top: 12px; }
