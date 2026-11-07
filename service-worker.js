@@ -1,4 +1,4 @@
-const CACHE = 'smart-systm-pilot-shell-v51';
+const CACHE = 'smart-systm-pilot-shell-v52';
 const SHELL = ['./', './index.html', './styles.css', './ui-fixes.css', './design-system.css', './domain.js', './app.js', './modules.js', './quotes.js', './operations.js', './auth.js', './service-worker.js', './manifest.webmanifest', './icon.svg', './favicon-32.png', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', event => {
@@ -25,3 +25,4 @@ self.addEventListener('notificationclick', event => {
     return existing ? existing.navigate(target).then(() => existing.focus()) : self.clients.openWindow(target);
   }));
 });
+
