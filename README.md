@@ -1,6 +1,6 @@
 # Smart syst’m Pilot
 
-Application web progressive en français, pensée pour téléphone, tablette et ordinateur. Elle contient des parcours locaux de démonstration et un socle de préparation serveur. Elle n’est pas un service de gestion de production : aucune donnée ne quitte cet appareil.
+Application web progressive en français, pensée pour téléphone, tablette et ordinateur. Elle contient des parcours locaux de démonstration et un socle de préparation serveur. Elle n’est pas un service de gestion de production : les dossiers restent dans le navigateur et aucune synchronisation n’est configurée. Si la recherche Google est configurée et utilisée, la requête d’adresse et la zone de carte sont transmises à Google.
 
 ## Ouvrir l’application
 
