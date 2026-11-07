@@ -68,7 +68,7 @@ function save({ restoring = false } = {}) {
   }
 }
 
-const ACTIVITY_LABELS = { clients: 'Client', sites: 'Chantier', quotes: 'Devis', invoices: 'Facture', appointments: 'Intervention', suppliers: 'Fournisseur', purchases: 'Commande', payments: 'Règlement', expenses: 'Dépense', prospects: 'Prospect', followups: 'Relance', tasks: 'Tâche', timeEntries: 'Temps passé', stockItems: 'Article de stock', stockMovements: 'Mouvement de stock', pricebook: 'Prestation', settings: 'Paramètres', documents: 'Document', reports: 'Rapport' };
+const ACTIVITY_LABELS = { clients: 'Client', sites: 'Chantier', quotes: 'Devis', invoices: 'Facture', appointments: 'Intervention', suppliers: 'Fournisseur', purchases: 'Commande', payments: 'Règlement', expenses: 'Dépense', prospects: 'Prospect', followups: 'Relance', tasks: 'Tâche', timeEntries: 'Temps passé', stockItems: 'Article de stock', stockMovements: 'Mouvement de stock', pricebook: 'Prestation', settings: 'Paramètres', accounts: 'Compte local', documents: 'Document', reports: 'Rapport' };
 function activityRecordName(record) { return String(record?.name || record?.reference || record?.title || record?.label || record?.supplier || record?.client || 'Élément').slice(0, 180); }
 function captureActivityChanges() {
   let before;
@@ -199,17 +199,14 @@ function currentLocalActor() {
   const account = window.SSPAuth?.getCurrentAccount?.();
   return { actorId: account?.id || '', actorName: account?.displayName || 'Compte local non identifié', actorUsername: account?.username || '' };
 }
-function recordDocumentAudit(collection, record, action) {
+function recordActivityAudit(collection, record, action, actor = currentLocalActor()) {
   data.auditLogs ||= [];
-  const actor = currentLocalActor();
-  data.auditLogs.unshift({
-    id: newId(), collection, recordId: record.id,
-    recordName: String(record.name || record.title || 'Document sans nom').slice(0, 180),
-    action, ...actor, occurredAt: new Date().toISOString()
-  });
+  data.auditLogs.unshift({ id: newId(), collection, recordId: String(record.id || ''), recordName: String(record.name || record.title || 'Élément').slice(0, 180), action, ...actor, occurredAt: new Date().toISOString() });
   data.auditLogs = data.auditLogs.slice(0, 2000);
 }
+function recordDocumentAudit(collection, record, action) { recordActivityAudit(collection, record, action); }
 window.recordDocumentAudit = recordDocumentAudit;
+window.recordActivityAudit = recordActivityAudit;
 function archiveDocumentRecord(collection, targetRecord, { restore = false, permanent = false } = {}) {
   if (!['documents', 'reports'].includes(collection)) return false;
   const records = data[collection] || [];
