@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#142b38">
+  <meta name="description" content="Smart syst’m Pilot — pilotez vos clients, chantiers et devis depuis votre téléphone.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="ui-fixes.css">
+  <link rel="stylesheet" href="design-system.css">
+  <title id="app-title">Smart syst’m Pilot</title>
+</head>
+<body>
+  <section id="auth-screen" class="auth-screen" aria-live="polite"></section>
+  <div class="app-shell" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="#accueil"><span class="brand-mark"><svg viewBox="0 0 512 512" aria-hidden="true"><path d="M99 229 256 103l157 126M133 221v173c0 13 10 23 23 23h200c13 0 23-10 23-23V221" fill="none" stroke="currentColor" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/><path d="M237 181h56l-36 72h44L216 354l20-80h-39z" fill="#f5b84b"/></svg></span><span><b id="app-name-short">smart syst’m</b><small id="app-name-product">PILOT</small></span></a>
+      <div class="company"><span class="avatar">SS</span><span><b id="company-name">Mon entreprise</b><small>Espace dirigeant</small></span></div>
+      <nav aria-label="Navigation principale">
+        <p class="nav-label">PILOTAGE</p>
+        <a href="#accueil" data-page="accueil" class="nav-link active"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3.5 10 8.5-7 8.5 7v10.5h-6v-6h-5v6h-6z"/></svg></i>Accueil</a>
+        <a href="#chantiers" data-page="chantiers" class="nav-link"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s7-6.3 7-12a7 7 0 1 0-14 0c0 5.7 7 12 7 12Z"/><circle cx="12" cy="9" r="2.2"/></svg></i>Chantiers <span class="nav-count">4</span></a>
+        <a href="#carte" data-page="carte" class="nav-link"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15m6-12v15"/></svg></i>Carte</a>
+        <a href="#planning" data-page="planning" class="nav-link"><i aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-13 4h2m4 0h2m-8 3h2"/></svg></i>Planning</a>
+        <a href="#clients" data-page="clients" class="nav-link"><i aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.4"/><path d="M2.8 20a6.2 6.2 0 0 1 12.4 0m2.2-14.2a3.3 3.3 0 0 1 0 6.4M17 14.5a5.4 5.4 0 0 1 4.2 5.2"/></svg></i>Clients</a>
+        <a href="#assistant" data-page="assistant" class="nav-link"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 2 1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></i>Assistant</a>
+        <p class="nav-label nav-gap">GESTION</p>
+        <a href="#devis" data-page="devis" class="nav-link"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v5h5M9 12h6m-6 4h6"/></svg></i>Devis & factures</a>
+        <a href="#achats" data-page="achats" class="nav-link"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 7 9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10m-5-12 9-4"/></svg></i>Achats & matériel</a>
+        <a href="#finances" data-page="finances" class="nav-link"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20V12m5 8V7m5 13v-5m5 5V3M2 20h20"/></svg></i>Finances</a>
+        <a href="#documents" data-page="documents" class="nav-link"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 9h18"/></svg></i>Documents</a>
+        <a href="#rapports" data-page="rapports" class="nav-link"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6m-6 4h6m-6 4h3"/></svg></i>Rapports</a>
+      </nav>
+      <div class="sidebar-bottom"><a href="#parametres" data-page="parametres" class="nav-link"><i aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.2.9-1.3 2.2-1.4-.6a7.8 7.8 0 0 1-1.7 1l-.2 1.5h-2.6l-.2-1.5a7.8 7.8 0 0 1-1.7-1l-1.4.6-1.3-2.2 1.2-.9a7 7 0 0 1 0-2l-1.2-.9 1.3-2.2 1.4.6a7.8 7.8 0 0 1 1.7-1l.2-1.5h2.6l.2 1.5a7.8 7.8 0 0 1 1.7 1l1.4-.6 1.3 2.2-1.2.9a7 7 0 0 1-.1 2Z"/></svg></i>Paramètres</a><div class="help-card"><span class="help-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14 9l6 2-6 2-2 6-2-6-6-2 6-2z"/></svg></span><b>Un coup de main ?</b><small>Retrouvez les conseils pour démarrer.</small><button data-action="help">Voir le guide <span>→</span></button></div><div class="profile"><span class="profile-avatar">MD</span><span><b>Dirigeant</b><small>Compte de démonstration</small></span><span class="more">···</span></div></div>
+    </aside>
+    <main class="main-area">
+      <header class="topbar"><button class="mobile-menu" aria-label="Ouvrir le menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><div class="breadcrumb"><span id="company-name-breadcrumb">Mon entreprise</span> <span>/</span> <b id="breadcrumb-page">Accueil</b></div><div class="top-actions"><div class="global-search-shell"><label class="search"><span aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg></span><input id="global-search" placeholder="Rechercher clients, chantiers…" autocomplete="off" aria-controls="global-search-results" aria-expanded="false"><kbd>⌘ K</kbd></label><div id="global-search-results" class="global-search-results" role="listbox" aria-label="Résultats de recherche" hidden></div></div><button class="icon-button" data-module-action="notifications" aria-label="Ouvrir les rappels locaux"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12h4"/></svg><em></em></button><button class="top-avatar">MD</button></div></header>
+      <div class="page-wrap" id="page-content"></div>
+      <footer class="app-footer"><span><i class="status-dot"></i>Enregistré sur cet appareil</span><span>Mode démonstration · Aucune donnée transmise</span></footer>
+    </main>
+  </div>
+  <nav class="mobile-nav" aria-label="Navigation mobile" hidden><a href="#accueil" data-page="accueil" class="active"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3.5 10 8.5-7 8.5 7v10.5h-6v-6h-5v6h-6z"/></svg></i><small>Accueil</small></a><a href="#chantiers" data-page="chantiers"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s7-6.3 7-12a7 7 0 1 0-14 0c0 5.7 7 12 7 12Z"/><circle cx="12" cy="9" r="2.2"/></svg></i><small>Chantiers</small></a><a href="#carte" data-page="carte"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15m6-12v15"/></svg></i><small>Carte</small></a><a href="#planning" data-page="planning"><i aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-13 4h2m4 0h2m-8 3h2"/></svg></i><small>Planning</small></a><a href="#devis" data-page="devis"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v5h5M9 12h6m-6 4h6"/></svg></i><small>Devis</small></a><button data-action="quick-add"><span aria-hidden="true">＋</span><small>Ajouter</small></button></nav>
+  <div class="toast" id="toast" role="status"></div>
+  <div class="modal-backdrop" id="modal-backdrop" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><div><p class="eyebrow" id="modal-eyebrow">NOUVEAU</p><h2 id="modal-title">Ajouter</h2></div><button class="close-modal" aria-label="Fermer">×</button></div><div id="modal-content"></div></section></div>
+  <script src="domain.js"></script>
+  <script src="app.js"></script>
+  <script src="modules.js"></script>
+  <script src="quotes.js"></script>
+  <script src="operations.js"></script>
+  <script src="auth.js"></script>
+</body>
+</html>
