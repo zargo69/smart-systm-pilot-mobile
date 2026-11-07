@@ -1,10 +1,70 @@
-# Smart syst’m Pilot — iPhone
+# Smart syst’m Pilot
 
-Version web progressive statique publiée via GitHub Pages.
+Application web progressive en français, pensée pour téléphone, tablette et ordinateur. Elle contient des parcours locaux de démonstration et un socle de préparation serveur. Elle n’est pas un service de gestion de production : aucune donnée ne quitte cet appareil.
 
-- Ouvrez l’adresse HTTPS dans Safari, touchez **Partager**, puis **Sur l’écran d’accueil**.
-- Les données de l’application sont conservées dans le navigateur de l’appareil ; elles ne sont ni envoyées à un serveur ni synchronisées entre appareils.
-- Les comptes et mots de passe sont locaux à l’appareil et ne constituent pas une authentification sécurisée côté serveur.
-- N’y stockez pas de données sensibles ou de documents confidentiels. Exportez régulièrement une sauvegarde depuis les paramètres.
+## Ouvrir l’application
 
-Le dépôt contient les fichiers nécessaires au fonctionnement de l’application, sans les coordonnées fictives de la version de démonstration.
+Sur ordinateur, lancez un serveur local dans ce dossier avec `python3 -m http.server 4173`, puis ouvrez `http://localhost:4173`. Sur iPhone, l’installation nécessite une adresse HTTPS. Le cache hors connexion et l’installation ne fonctionnent pas en ouvrant `index.html` directement.
+
+Au premier lancement, créez un profil responsable local avec un identifiant et une adresse e-mail. La session reste active après une actualisation de la page ; vous devrez vous reconnecter après 15 minutes sans activité. Depuis **Paramètres**, ce responsable peut créer et modifier les profils, leur adresse e-mail et leur mot de passe. Il peut aussi désactiver ou réactiver les profils membres. Les mots de passe n’ont pas de longueur minimale, mais doivent contenir une majuscule et un chiffre ; ils peuvent être affichés pendant la saisie. Ils sont dérivés par PBKDF2 et ne sont pas enregistrés en clair. La récupération vérifie l’adresse dans ce navigateur puis change le mot de passe sur cet appareil ; aucun e-mail n’est envoyé et l’adresse n’est pas vérifiée. La session locale expire après 15 minutes sans activité et se partage entre les onglets de cette application sur le même navigateur. Ces profils ne séparent pas les données et ne constituent pas une authentification sécurisée : ils peuvent être contournés par une personne ayant accès à l’appareil ou au stockage du navigateur.
+
+Les profils créés avant l’ajout de l’adresse e-mail la renseigneront lors de leur prochaine connexion ; jusque-là, ils peuvent utiliser leur identifiant.
+
+Sur un hébergement HTTPS, ouvrez l’adresse dans Safari, utilisez **Partager**, puis **Sur l’écran d’accueil**. Cette étape n’active ni comptes serveur, ni partage de données, ni synchronisation.
+
+Dans le menu latéral bleu, faites défiler la liste des rubriques verticalement ; le bloc de profil et les réglages en bas restent accessibles séparément.
+
+## Interface
+
+L’interface reprend les couleurs de marque du logo : bleu cobalt, indigo et jaune citron, avec des dégradés doux, des surfaces claires, des cartes discrètes et des textes secondaires agrandis. La navigation, les actions et les écrans existants conservent leurs fonctions et leurs données locales. Les styles adaptatifs prévoient une mise en page dédiée jusqu’à 390 px, des champs tactiles plus grands et des formulaires en panneau bas sur téléphone. Un contrôle navigateur du 7 novembre 2026 a parcouru les rubriques principales et mesuré l’écran de connexion à 390 px ; aucun débordement horizontal n’a été observé. Le menu latéral conserve une zone de défilement sur petit écran. Aucun iPhone physique n’a été testé.
+
+## Parcours disponibles
+
+- Accueil de pilotage : bloc « Ma journée » rassemble les interventions et tâches du jour ou en retard, avec des accès directs aux actions les plus courantes. Les filtres par période, chantier, client, intervenant et type de rappel restent disponibles. Les cartes distinguent les devis à suivre et acceptés des règlements saisis, achats engagés, dépenses payées et heures pointées. Les échéances à venir et chantiers actifs sont dérivés des enregistrements locaux ; aucun chiffre bancaire ou de trésorerie n’est simulé.
+- CRM local : clients et prospects, origine et besoin du prospect, étape commerciale, relances datées, détection de doublons probables et conversion sans ressaisie. Une fusion déclenchée par l’utilisateur complète les champs vides et conserve les valeurs différentes dans la fiche client avec un historique local.
+- Recherche globale locale : clients, prospects, chantiers, devis, factures brouillon, commandes, interventions, documents, rapports, tâches et articles de stock. Les résultats ouvrent la fiche ou l’écran correspondant ; le raccourci `⌘ K`/`Ctrl K` fonctionne sur ordinateur.
+- Chantiers : création, recherche, consultation et modification locale.
+- Devis et factures brouillon : devis détaillés, calcul par ligne, versions, signatures tracées locales, aperçus PDF et préparation d’e-mail. Une facture locale peut être créée depuis un devis accepté, reprend une copie des lignes et montants, se prévisualise et s’imprime en PDF. Un brouillon non réglé peut être supprimé ; les règlements peuvent être retirés depuis leur menu. Aucun document n’est numéroté ou validé comme document comptable conforme.
+- Bibliothèque de prestations : catalogue local modifiable (prix de vente HT, coûts, unité et TVA proposée) et ajout de ses lignes au devis. Les prix des exemples sont laissés à renseigner.
+- Versions de devis : création d’une nouvelle version sans remplacer la précédente ; état accepté/refusé/expiré saisi manuellement. Un devis marqué accepté peut créer un chantier lié en reprenant le client et le budget HT, avec adresse et date à compléter. Une signature tracée peut être recueillie sur cet appareil et imprimée avec l’aperçu ; ce n’est pas une signature vérifiée ni certifiée.
+- Planning : vues jour/semaine/mois, navigation de période, filtres par chantier/intervenant, création rapide préremplie à la date choisie, interventions locales et détection des chevauchements.
+- Chantier : tâches avec échéances, pointages d’heures et coût horaire, checklist, galerie de photos compressées avant/pendant/après/réserve et vue des coûts saisis. Les nouvelles données liées utilisent l’identifiant du chantier pour rester rattachées après un renommage. Les photos restent dans le navigateur local et l’export JSON ; aucune synchronisation distante n’est configurée.
+- Achats : commandes locales détaillées par lignes, unités, quantités, prix d’achat HT et TVA indicative ; total recalculé, validation manuelle, réceptions partielles par ligne avec reliquat et historique. Une ligne peut être liée à un article existant du stock (unité identique) : les réceptions ajoutent alors automatiquement une entrée locale, identifiée par commande/réception, sans enregistrer une dépense payée. Aucune commande n’est envoyée au fournisseur ; facture, paiement fournisseur, retours et rapprochement complet restent à construire.
+- Finances : vue par chantier des devis acceptés rattachés, commandes engagées, dépenses payées saisies, matériel consommé, heures chiffrées et marge calculée seulement quand les ventes et le coût horaire sont renseignés. Évitez de saisir une même dépense dans plusieurs rubriques.
+- Documents et rapports : ajout et modification de pièces locales, photos de chantier et comptes rendus, avec auteur et date pour les nouvelles actions. L’onglet Historique des Documents affiche les actions les plus récentes sur les principales rubriques (clients, chantiers, devis, factures, règlements, prestations, achats et autres enregistrements) ; jusqu’à 2 000 événements sont conservés localement. La suppression normale archive ; la suppression définitive est disponible depuis Archives et conserve l’entrée d’historique. Les anciens éléments antérieurs à cette fonction n’ont pas d’auteur rétrospectif. Les comptes sont locaux, donc l’auteur correspond au profil sélectionné sur cet appareil. Les fichiers restent locaux et figurent dans l’export. Les formulaires reprennent un brouillon temporaire dans le même onglet ; les fichiers doivent être sélectionnés à nouveau.
+- Paramètres : nom de l’entreprise, nom de l’application, pays, devise et clé Google Maps du navigateur. Une clé Google de navigateur est visible par le client et doit être restreinte au domaine du site et aux deux API utilisées.
+- Données : export JSON et restauration locale. Le fichier exporté peut contenir des coordonnées personnelles ; protégez-le.
+- Profils locaux : création initiale d’un responsable, connexion par identifiant ou e-mail, gestion des profils membres et réinitialisation locale du mot de passe à partir de l’e-mail enregistré. Aucun message de récupération n’est envoyé ni vérifié. Les profils ne compartimentent pas les données et le verrou ne remplace pas des rôles serveur.
+- Carte et adresses : la carte Google Maps reste visible même sans chantier localisé. Les formulaires client et chantier proposent la recherche et la sélection d’adresses Google ; le choix enregistre l’adresse et ses coordonnées pour placer ensuite le chantier sur la carte. Google Maps JavaScript API et Places API, une clé restreinte et une facturation activée sont nécessaires ; consultez [le guide de configuration Google Maps](google-maps-setup.md).
+- Rappels locaux : l’icône en haut liste les relances, tâches, interventions, échéances de factures impayées et livraisons prévues jusqu’à sept jours. Les notifications système peuvent être activées séparément ; elles ne fonctionnent que lorsque l’application est ouverte et que le navigateur les prend en charge.
+- Actualisation locale entre onglets : une modification enregistrée dans un autre onglet du même navigateur et de la même adresse actualise la vue ouverte. Ce n’est pas une synchronisation entre appareils ni une sauvegarde distante.
+- Assistant de pilotage : contrôles locaux par règles simples (devis à suivre, échéances renseignées, budgets saisis, interventions proches, prix manquants et GPS absent). Ce n’est pas une IA générative et aucune donnée n’est transmise.
+- Application progressive : cache de l’interface après une première ouverture en HTTPS ou sur `localhost`. Seule l’interface est mise en cache.
+
+Pour les étapes détaillées et les limites, voir [le guide utilisateur](guide-utilisateur.md) et [l’état réel du livrable](etat-et-limites.md).
+
+Pour une lecture exigence par exigence du prompt maître et des 18 scénarios minimums, voir [l’audit de conformité](audit-prompt-maitre.md).
+
+## Limites qui empêchent l’usage réel en entreprise
+
+Les listes, profils et montants sont dans le stockage local du navigateur. Il n’existe pas de compte serveur, de partage entre appareils, de sauvegarde distante, de base activée, de mode hors ligne avec synchronisation, ni de contrôle d’accès serveur. Le verrou local n’isole pas les profils les uns des autres et ne protège pas les données contre une personne qui contrôle l’appareil. L’actualisation entre onglets ne protège pas des modifications concurrentes. Les données de démonstration sont fictives : n’enregistrez aucune donnée client réelle ou sensible.
+
+Les documents restent des brouillons locaux : la signature tracée est une image conservée dans le navigateur, sans contrôle d’identité, preuve cryptographique ni certification. Les aperçus se sauvegardent en PDF depuis l’impression du navigateur ; aucun numéro définitif n’est attribué, aucun courriel n’est envoyé et aucune plateforme agréée de facturation électronique n’est connectée. Les paiements ne sont pas importés d’une banque. Les commandes ne partent pas aux fournisseurs.
+
+La carte Google et les suggestions d’adresses ne fonctionnent qu’après configuration par l’utilisateur d’une clé API valide et restreinte ; l’application n’inclut aucune clé ; l’optimisation d’itinéraire, les contrats de maintenance, les tournées, l’IA connectée et les intégrations comptables/fournisseurs ne sont pas actifs. L’assistant de pilotage repose sur des règles locales et n’est pas un modèle IA. Les notifications système se limitent aux rappels du jour quand l’application est ouverte ; aucune livraison en arrière-plan n’est garantie. La recherche globale et le centre de rappels interrogent uniquement les données de ce navigateur. Le catalogue, l’historique de mouvements de stock et les heures réelles restent locaux. Les calculs de TVA ne confirment pas l’éligibilité à un taux. Le calcul fiscal suisse est bloqué dans le devis.
+
+## État de vérification
+
+Le 7 novembre 2026, tous les fichiers JavaScript passaient le contrôle de syntaxe et les tests des règles métier passaient dans la version précédente. Pour cette mise à jour, le contrôle de syntaxe a été relancé ; l’intégration Google n’a pas été testée faute de clé utilisateur. L’audit a aussi renforcé la validation des données JSON au démarrage et à l’import, la conservation d’une copie brute si les données locales sont illisibles, le retour à la dernière version enregistrée si une sauvegarde échoue, l’échappement des identifiants de devis, la stabilité des dates sans heure et l’alignement des cases de la checklist de fin d’intervention dans la fenêtre chantier sur mobile. Le contrôle navigateur a parcouru les rubriques et vérifié l’affichage à 390 px. Les parcours qui requièrent une création de compte ou un envoi externe n’ont pas été simulés avec des données réelles. Dans un navigateur local, l’accueil et ses filtres, le planning jour/semaine/mois, le refus d’un chevauchement, les achats et réceptions liées au stock ont été vérifiés. Le stock final après deux livraisons partielles reste à 10 et donne exactement deux mouvements. La création de prestation et son ajout au devis, la signature dessinée et son aperçu imprimable, et l’actualisation entre onglets ont aussi été exercés. La carte a été chargée après consentement sur des coordonnées publiques fictives ; ses filtres, sa recherche, son regroupement et l’ouverture du dossier ont été vérifiés. L’assistant local a été ouvert sans erreur console. Aucun fournisseur n’a reçu de commande et aucune permission de notification n’a été demandée. L’iPhone réel n’a pas été validé. Ces contrôles ne prouvent pas l’IA connectée, les accès serveur, la restauration distante, la synchronisation entre appareils, la sécurité ou la conformité.
+
+Le schéma PostgreSQL et ses tests pgTAP sont des préparatifs non exécutés : aucun serveur PostgreSQL/Supabase n’est disponible dans cet espace. Le backend, l’hébergement, les comptes et les intégrations ne sont donc pas activés.
+
+## Documents techniques
+
+- [Guide utilisateur](guide-utilisateur.md)
+- [Cadrage produit, benchmark sourcé, maquettes et architecture](cadrage-phase-0.md)
+- [État réel et limites](etat-et-limites.md)
+- [Audit du prompt maître et des scénarios QA](audit-prompt-maitre.md)
+- [Guide de préparation du backend](backend/README.md)
+- [Migration PostgreSQL/Supabase initiale](backend/supabase/migrations/202610250001_core.sql)
+- [Tests pgTAP préparés](backend/supabase/tests/rls_core.test.sql)
