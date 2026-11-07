@@ -55,7 +55,7 @@ La carte et la recherche d’adresse requièrent Internet et dépendent de servi
 
 ## Dernier contrôle
 
-Le 8 novembre 2026, les cinq scripts JavaScript principaux ont passé un contrôle de syntaxe après la réparation de l’accueil et le remplacement de l’imagerie 2016 par la couche aérienne IGN BD ORTHO en France. Les fichiers d’aide et les limites cartographiques ont été actualisés. Le rendu réel des tuiles IGN, le parcours complet en navigateur après publication et l’affichage sur un iPhone à 390 px restent à vérifier. L’application ne fournit toujours ni comptes serveur, ni synchronisation entre appareils, ni sauvegarde distante, ni IA connectée.
+Le 8 novembre 2026, les cinq scripts JavaScript principaux ont passé un contrôle de syntaxe après la réparation de l’accueil et le remplacement de l’imagerie 2016 par la couche aérienne IGN BD ORTHO en France. Une tuile WMTS de Lyon a bien répondu en image 256 × 256 ; le fichier de l’application et son cache version v52 ont aussi été lus sur GitHub Pages après publication. Le parcours interactif complet après publication et l’affichage sur un iPhone à 390 px restent à vérifier. L’application ne fournit toujours ni comptes serveur, ni synchronisation entre appareils, ni sauvegarde distante, ni IA connectée.
 
 Pour les étapes détaillées, consultez le [guide utilisateur](guide-utilisateur.md) et le [guide carte et adresses](carte-gratuite.md).
 
