@@ -312,6 +312,12 @@
 .site-map { width: 100%; min-height: 380px; height: min(58vh, 620px); border: 1px solid #dfe8e7; border-radius: 10px; overflow: hidden; background: #eef3f1; }
 .site-map[hidden] { display: none; }
 .map-filters { display: grid; grid-template-columns: minmax(170px, 1.5fr) repeat(2, minmax(130px, 1fr)) auto; gap: 10px; align-items: end; margin: 0 0 12px; }
+.map-basemap-switch { display: inline-flex; gap: 4px; margin: 0 0 12px; padding: 4px; border: 1px solid #e1e8e9; border-radius: 10px; background: #f5f7f8; }
+.map-basemap-switch button { min-height: 36px; padding: 0 13px; border: 0; border-radius: 7px; background: transparent; color: #526970; font: 600 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; cursor: pointer; }
+.map-basemap-switch button.active { background: #fff; color: #3444a7; box-shadow: 0 1px 4px #1d344014; }
+.map-credit-satellite { display: none; }
+.map-attribution.is-satellite .map-credit-streets { display: none; }
+.map-attribution.is-satellite .map-credit-satellite { display: inline; }
 .map-filters label { display: block; color: #62767b; font-size: 10px; font-weight: 600; }
 .map-filters input, .map-filters select { display: block; width: 100%; height: 36px; margin-top: 6px; border: 1px solid #e1e8e9; border-radius: 7px; padding: 0 9px; color: #344d55; background: #fff; font: 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 .map-results-count { align-self: center; color: #78898e; font-size: 10px; white-space: nowrap; }
