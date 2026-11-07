@@ -113,7 +113,7 @@ function openQuotePrint(id) {
     <table><thead><tr><th>Désignation</th><th class="number">Qté</th><th>Unité</th><th class="number">PU HT</th><th class="number">Remise</th><th class="number">TVA</th><th class="number">Total HT</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="totals"><div><span>Total HT</span><b>${money(quoteListAmount(quote, 'HT'))}</b></div>${vatRows}<div class="grand"><span>Total TTC indicatif</span><b>${money(quoteListAmount(quote, 'TTC'))}</b></div></div>
     ${signature}<footer>Document généré localement pour prévisualisation. Les coordonnées complètes de l’entreprise et du client, les mentions légales, les conditions de vente et la validation du taux de TVA restent à vérifier. La référence n’est pas une numérotation définitive. ${quote.signatureDataUrl ? 'La signature est une trace locale non vérifiée et ne constitue pas une signature électronique certifiée.' : 'Aucune signature ni transmission n’est réalisée.'}</footer>
-  </div><p class="form-hint print-help">Utilisez l’action d’impression pour enregistrer ce brouillon en PDF. Les coûts et la marge internes ne sont pas inclus dans le document.</p><div class="form-actions print-controls"><button class="btn secondary" data-quote-action="print-back" data-id="${esc(quote.id)}">Retour au devis</button><button class="btn primary" data-quote-action="print-now">Imprimer / enregistrer en PDF</button></div>`);
+  </div><p class="form-hint print-help">Sur iPhone, utilisez Imprimer puis le partage de l’aperçu pour enregistrer dans Fichiers ou l’envoyer. Pour l’e-mail, enregistrez d’abord le PDF et joignez-le au message. Les coûts et la marge internes ne sont pas inclus dans le document.</p><div class="form-actions print-controls"><button class="btn secondary" data-quote-action="print-back" data-id="${esc(quote.id)}">Retour au devis</button><button class="btn secondary" data-quote-action="email" data-id="${esc(quote.id)}">Préparer un e-mail</button><button class="btn primary" data-quote-action="print-now">Imprimer / enregistrer en PDF</button></div>`);
 }
 
 function openPricebookManager() {
@@ -266,6 +266,15 @@ document.addEventListener('click', event => {
   if (action === 'open-site') { const quote = data.quotes.find(item => item.id === button.dataset.id); const site = quote && siteFromValue(quote.siteId || quote.site); if (site) { route('chantiers'); return showSite(site.id); } return notify('Le chantier associé est introuvable.'); }
   if (action === 'print') return openQuotePrint(button.dataset.id);
   if (action === 'print-now') return window.print();
+  if (action === 'email') {
+    const quote = data.quotes.find(item => item.id === button.dataset.id);
+    const client = quote && data.clients.find(item => item.name === quote.client);
+    if (!quote || !client?.email) return notify('Ajoutez une adresse e-mail dans la fiche client avant de préparer le message.');
+    const subject = encodeURIComponent(`Devis brouillon ${quote.reference || quote.id} — ${data.settings.companyName}`);
+    const body = encodeURIComponent(`Bonjour,\n\nVeuillez trouver ci-joint le PDF du devis brouillon ${quote.reference || quote.id}.\n\nCordialement,\n${data.settings.companyName}\n\nPensez à joindre le PDF enregistré depuis l’aperçu.`);
+    location.href = `mailto:${encodeURIComponent(client.email)}?subject=${subject}&body=${body}`;
+    return;
+  }
   if (action === 'print-back') return openQuoteDetails(button.dataset.id);
   if (button.dataset.action === 'add-quote') return openQuoteForm();
   if (button.hasAttribute('data-quote')) return openQuoteDetails(button.dataset.quote);
