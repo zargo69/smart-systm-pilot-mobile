@@ -384,11 +384,49 @@ function purchasesPage() {
   return `${heading('APPROVISIONNEMENT', 'Achats & matériel', 'Détaillez les articles, suivez les commandes et enregistrez les réceptions partielles.', `<button class="btn secondary" data-module-action="supplier">＋ Fournisseur</button> <button class="btn primary" data-module-action="purchase">＋ Commande</button>`)}${localNotice}<div class="metric-grid compact-metrics"><article class="metric-card"><div class="metric-label">Fournisseurs</div><strong>${data.suppliers.length}</strong></article><article class="metric-card"><div class="metric-label">Commandes</div><strong>${data.purchases.length}</strong></article><article class="metric-card"><div class="metric-label">Engagé HT · indicatif</div><strong>${money(total)}</strong><div class="metric-note">Ne signifie pas que la commande est payée</div></article></div><section class="panel"><div class="panel-head"><div><h2>Commandes</h2><p>Ouvrez une commande pour contrôler ses lignes et ses réceptions. Le statut de réception ne confirme pas le paiement.</p></div></div>${moduleList(data.purchases.map(x => { const lines = Array.isArray(x.lines) ? x.lines : []; const ordered = lines.reduce((sum, line) => sum + Number(line.quantity || 0), 0); const received = lines.reduce((sum, line) => sum + Number(line.receivedQuantity || 0), 0); const detail = lines.length ? `${lines.length} article(s) · ${received}/${ordered} unité(s) reçue(s)` : 'Ancienne commande · détail des lignes indisponible'; return moduleRow('▧', `${x.reference} · ${x.supplier}`, `${siteLabel(x)} · livraison ${x.delivery || 'non renseignée'} · ${money(x.amountHT)} HT · ${detail}`, `<span class="pill neutral">${esc(x.status)}</span>`, x.id); }), 'Aucune commande enregistrée.')}</section><section class="panel list-panel"><div class="panel-head"><div><h2>Fournisseurs</h2><p>Coordonnées saisies manuellement</p></div></div>${moduleList(data.suppliers.map(x => moduleRow('♙', x.name, [x.email, x.phone].filter(Boolean).join(' · ') || 'Coordonnées à compléter', '', x.id)), 'Aucun fournisseur enregistré.')}</section>`;
 }
 
+function invoiceListRow(invoice) {
+  const title = `${invoice.reference || 'Facture brouillon'} · ${invoice.client || 'Client à préciser'}`;
+  return `<div class="quote-line invoice-list-row"><span class="doc-icon">${iconSvg('▤')}</span><span class="quote-name"><b>${esc(title)}</b><small>${esc(siteLabel(invoice))} · ${esc(invoice.invoiceDate || 'Date à préciser')} · ${money(invoice.amountHT)} HT</small></span><strong>${money(invoice.amountTTC)}</strong><div class="invoice-row-actions"><button class="btn secondary" data-invoice-action="open" data-id="${esc(invoice.id)}">Voir</button><button class="btn secondary" data-invoice-action="print" data-id="${esc(invoice.id)}">PDF</button></div></div>`;
+}
+
+function invoiceSource(invoice) {
+  return invoice.quoteSnapshot || data.quotes.find(quote => quote.id === invoice.quoteId) || null;
+}
+
+function openInvoiceDetails(id) {
+  const invoice = data.invoices.find(item => item.id === id); if (!invoice) return;
+  const payments = (data.payments || []).filter(item => item.invoiceId === id);
+  const paid = payments.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const remaining = Math.max(0, Number(invoice.amountTTC || 0) - paid);
+  const client = data.clients.find(item => item.name === invoice.client);
+  modal(invoice.reference || 'Facture brouillon', `<div class="detail-card"><span class="pill neutral">${esc(invoice.status || 'Brouillon local')}</span><p><b>Client</b><br>${esc(invoice.client || 'À préciser')}${client?.email ? `<br>${esc(client.email)}` : ''}</p><p><b>Chantier</b><br>${esc(siteLabel(invoice))}</p><p><b>Date de facture</b><br>${esc(invoice.invoiceDate || 'Non précisée')}</p><p><b>Échéance</b><br>${esc(invoice.dueDate || 'Non précisée')}</p><p><b>Total HT / TTC indicatif</b><br>${money(invoice.amountHT)} HT · ${money(invoice.amountTTC)} TTC</p><p><b>Règlements saisis</b><br>${money(paid)} · reste indicatif ${money(remaining)}</p><p class="form-hint">Cette facture reste un brouillon local : l’application n’attribue pas de numéro comptable et ne vérifie pas les mentions légales. L’aperçu PDF porte clairement la mention brouillon.</p><button class="btn primary full-btn" data-invoice-action="print" data-id="${esc(id)}">Voir l’aperçu et enregistrer en PDF</button><button class="btn secondary full-btn" data-invoice-action="email" data-id="${esc(id)}">Préparer un e-mail au client</button>${remaining > 0 ? `<button class="btn secondary full-btn" data-invoice-action="payment" data-id="${esc(id)}">Saisir un règlement reçu</button>` : ''}</div>`);
+}
+
+function openInvoicePrint(id) {
+  const invoice = data.invoices.find(item => item.id === id); if (!invoice) return;
+  const source = invoiceSource(invoice);
+  const lines = source?.lines || [];
+  const rows = lines.map(line => `<tr><td>${esc(line.description || '')}</td><td class="number">${Number(line.quantity || 0).toLocaleString('fr-FR')}</td><td>${esc(line.unit || 'unité')}</td><td class="number">${money((line.unitPriceHTCents ?? Math.round(Number(line.unitPriceHT || 0) * 100)) / 100)}</td><td class="number">${Number(line.vatRate ?? 0).toLocaleString('fr-FR')} %</td><td class="number">${money((line.totalHTCents ?? 0) / 100)}</td></tr>`).join('');
+  const vatByRate = invoice.vatRates || source?.totals?.vatByRateCents || {};
+  const vatRows = Object.entries(vatByRate).map(([rate, cents]) => `<div><span>TVA ${esc(String(rate).replace('.', ','))} %</span><b>${money(Number(cents) / 100)}</b></div>`).join('');
+  const company = esc(data.settings?.companyName || 'Mon entreprise');
+  const client = data.clients.find(item => item.name === invoice.client);
+  const clientAddress = [client?.address, client?.postalCode, client?.city].filter(Boolean).map(esc).join(' · ');
+  modal(`Aperçu de facture · ${invoice.reference || 'Brouillon'}`, `<div id="invoice-print-document" class="quote-print-document">
+    <header><div><div class="brand">${company}</div><h1>Facture brouillon</h1><div class="muted">${esc(source?.title || invoice.site || 'Prestation liée au devis accepté')}</div></div><div class="muted"><b>Référence locale</b><br>${esc(invoice.reference || 'Non attribuée')}<br><b>Date</b> · ${esc(invoice.invoiceDate || 'non précisée')}<br><b>Échéance</b> · ${esc(invoice.dueDate || 'non précisée')}</div></header>
+    <div class="draft">BROUILLON — NUMÉRO ET MENTIONS LÉGALES À VÉRIFIER AVANT TOUT ENVOI</div>
+    <h2>Destinataire et chantier</h2><div class="muted"><b>Client :</b> ${esc(invoice.client || 'À préciser')}${clientAddress ? `<br>${clientAddress}` : ''}${client?.email ? `<br>${esc(client.email)}` : ''}<br><b>Chantier :</b> ${esc(siteLabel(invoice))}<br><b>Devis d’origine :</b> ${esc(source?.reference || invoice.quoteId || 'Non renseigné')}</div>
+    ${rows ? `<table><thead><tr><th>Désignation</th><th class="number">Qté</th><th>Unité</th><th class="number">PU HT</th><th class="number">TVA</th><th class="number">Total HT</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="form-hint">Les lignes du devis d’origine sont introuvables. Vérifiez cette facture avant de l’utiliser.</p>'}
+    <div class="totals"><div><span>Total HT</span><b>${money(invoice.amountHT)}</b></div>${vatRows}<div class="grand"><span>Total TTC indicatif</span><b>${money(invoice.amountTTC)}</b></div></div>
+    <footer>Document préparé localement pour prévisualisation. Cette application ne vérifie pas les mentions légales, la numérotation comptable, la TVA applicable ni la conformité de la facture. Aucun envoi n’est effectué.</footer>
+  </div><p class="form-hint print-help">Sur iPhone, utilisez Imprimer puis ouvrez le partage de l’aperçu pour enregistrer dans Fichiers ou l’envoyer. Pour un envoi par e-mail, joignez le PDF enregistré.</p><div class="form-actions print-controls"><button class="btn secondary" data-invoice-action="back" data-id="${esc(id)}">Retour</button><button class="btn primary" data-invoice-action="print-now">Imprimer / enregistrer en PDF</button></div>`);
+}
+
 function financesPage() {
   const paidFor = id => data.payments.filter(p => p.invoiceId === id).reduce((sum, p) => sum + Number(p.amount || 0), 0);
   const receivable = data.invoices.reduce((sum, x) => sum + Math.max(0, Number(x.amountTTC || 0) - paidFor(x.id)), 0);
   const expenses = data.expenses.reduce((sum, x) => sum + Number(x.amount || 0), 0);
-  return `${heading('PILOTAGE FINANCIER', 'Finances', 'Séparez les brouillons, règlements saisis et dépenses.', `<button class="btn secondary" data-module-action="expense">＋ Dépense</button> <button class="btn primary" data-module-action="invoice">＋ Brouillon de facture</button>`)}${localNotice}<div class="metric-grid compact-metrics"><article class="metric-card"><div class="metric-label">Brouillons · TTC indicatif</div><strong>${money(data.invoices.reduce((s, x) => s + Number(x.amountTTC || 0), 0))}</strong><div class="metric-note">Non numérotés et non conformes</div></article><article class="metric-card"><div class="metric-label">À encaisser · selon saisies</div><strong>${money(receivable)}</strong><div class="metric-note">Pas un solde bancaire réel</div></article><article class="metric-card"><div class="metric-label">Dépenses saisies</div><strong>${money(expenses)}</strong><div class="metric-note">Engagées ou payées selon votre saisie</div></article></div><section class="panel"><div class="panel-head"><div><h2>Factures brouillon</h2><p>Création autorisée depuis un devis marqué accepté.</p></div></div>${moduleList(data.invoices.map(x => moduleRow('▤', `${x.reference} · ${x.client}`, `${siteLabel(x)} · ${money(x.amountHT)} HT · TVA ${x.vat} %`, `<strong>${money(x.amountTTC)}</strong>`, x.id)), 'Aucun brouillon de facture.')}</section><section class="panel list-panel"><div class="panel-head"><div><h2>Dépenses</h2><p>Une facture fournisseur n’est pas un paiement confirmé.</p></div></div>${moduleList(data.expenses.map(x => moduleRow('◒', x.label, `${siteLabel(x)} · ${x.date} · ${x.status}`, `<strong>${money(x.amount)}</strong>`, x.id)), 'Aucune dépense saisie.')}</section><section class="panel list-panel"><div class="panel-head"><div><h2>Règlements saisis</h2><p>À rapprocher avec les justificatifs bancaires.</p></div></div>${moduleList(data.payments.map(x => moduleRow('€', x.invoiceRef, `${x.date} · ${x.method}`, `<strong>${money(x.amount)}</strong>`)), 'Aucun règlement saisi.')}</section>`;
+  return `${heading('PILOTAGE FINANCIER', 'Finances', 'Consultez vos factures, exportez-les en PDF et suivez les règlements saisis.', `<button class="btn secondary" data-module-action="expense">＋ Dépense</button> <button class="btn primary" data-module-action="invoice">＋ Nouvelle facture</button>`)}${localNotice}<div class="metric-grid compact-metrics"><article class="metric-card"><div class="metric-label">Factures brouillon · TTC indicatif</div><strong>${money(data.invoices.reduce((s, x) => s + Number(x.amountTTC || 0), 0))}</strong><div class="metric-note">À vérifier avant toute utilisation</div></article><article class="metric-card"><div class="metric-label">À encaisser · selon saisies</div><strong>${money(receivable)}</strong><div class="metric-note">Pas un solde bancaire réel</div></article><article class="metric-card"><div class="metric-label">Dépenses saisies</div><strong>${money(expenses)}</strong><div class="metric-note">Engagées ou payées selon votre saisie</div></article></div><section class="panel"><div class="panel-head"><div><h2>Factures</h2><p>Ouvrez une facture pour la visualiser, l’imprimer en PDF ou saisir un règlement.</p></div></div>${moduleList(data.invoices.map(invoiceListRow), 'Aucune facture. Créez-en une à partir d’un devis accepté.')}</section><section class="panel list-panel"><div class="panel-head"><div><h2>Dépenses</h2><p>Une facture fournisseur n’est pas un paiement confirmé.</p></div></div>${moduleList(data.expenses.map(x => moduleRow('◒', x.label, `${siteLabel(x)} · ${x.date} · ${x.status}`, `<strong>${money(x.amount)}</strong>`, x.id)), 'Aucune dépense saisie.')}</section><section class="panel list-panel"><div class="panel-head"><div><h2>Règlements saisis</h2><p>À rapprocher avec les justificatifs bancaires.</p></div></div>${moduleList(data.payments.map(x => moduleRow('€', x.invoiceRef, `${x.date} · ${x.method}`, `<strong>${money(x.amount)}</strong>`)), 'Aucun règlement saisi.')}</section>`;
 }
 
 function documentsPage() {
@@ -642,7 +680,7 @@ function openModuleForm(type, selectedId = '') {
   if (type === 'invoice') {
     const accepted = data.quotes.filter(q => q.status === 'Accepté');
     if (!accepted.length) return notify('Marquez d’abord un devis comme accepté dans la rubrique Devis.');
-    moduleForm(type, 'Brouillon de facture', `<label>Devis accepté<select name="quoteId" required>${accepted.map(q => `<option value="${esc(q.id)}">${esc(q.id)} · ${esc(q.title)} · ${esc(q.client)}</option>`).join('')}</select></label><label>Échéance<input name="dueDate" type="date"></label><p class="form-hint">Le document restera un brouillon local non numéroté. Il ne peut pas être envoyé ni déclaré conforme.</p>`);
+    moduleForm(type, 'Nouvelle facture brouillon', `<label>Devis accepté<select name="quoteId" required>${accepted.map(q => `<option value="${esc(q.id)}">${esc(q.reference || q.id)} · ${esc(q.title)} · ${esc(q.client)}</option>`).join('')}</select></label><div class="form-row"><label>Date de facture<input name="invoiceDate" type="date" required value="${todayISO()}"></label><label>Échéance<input name="dueDate" type="date"></label></div><p class="form-hint">Les lignes et montants sont repris du devis et conservés dans une copie. La facture restera un brouillon local non numéroté ; vérifiez les mentions légales avant toute utilisation.</p>`);
   }
   if (type === 'payment') {
     const invoice = data.invoices.find(x => x.id === selectedId);
@@ -704,7 +742,9 @@ function storeModuleForm(form, fileData = null) {
     const vatRates = quote.totals?.vatByRateCents ?? { [String(quote.vat ?? 20)]: amountTTC - amountHT };
     const clientSites = data.sites.filter(site => site.client === quote.client);
     const linkedSite = siteFromValue(quote.siteId || quote.site) || (clientSites.length === 1 ? clientSites[0] : null);
-    data.invoices.unshift({ id: newId(), reference: `BROUILLON-${newId().slice(-6).toUpperCase()}`, quoteId: quote.id, client: quote.client, siteId: linkedSite?.id || '', site: linkedSite?.name || quote.site || 'À rattacher', amountHT: centsToEuros(amountHT), amountTTC: centsToEuros(amountTTC), vatRates, vat: quote.vat || 'multi-taux', dueDate: values.dueDate, status: 'Brouillon local' });
+    const invoiceId = newId();
+    const quoteSnapshot = JSON.parse(JSON.stringify({ id: quote.id, reference: quote.reference || quote.id, title: quote.title, client: quote.client, site: quote.site || '', lines: quote.lines || [], totals: quote.totals || null }));
+    data.invoices.unshift({ id: invoiceId, reference: `BROUILLON-${invoiceId.slice(-6).toUpperCase()}`, quoteId: quote.id, quoteSnapshot, client: quote.client, siteId: linkedSite?.id || '', site: linkedSite?.name || quote.site || 'À rattacher', amountHT: centsToEuros(amountHT), amountTTC: centsToEuros(amountTTC), vatRates, vat: quote.vat || 'multi-taux', invoiceDate: values.invoiceDate || todayISO(), dueDate: values.dueDate, createdAt: new Date().toISOString(), status: 'Brouillon local' });
   }
   if (type === 'payment') {
     const invoice = data.invoices.find(x => x.id === form.dataset.invoiceId);
@@ -838,6 +878,30 @@ document.addEventListener('click', event => {
     }
     return;
   }
+  const invoiceAction = event.target.closest('[data-invoice-action]');
+  if (invoiceAction) {
+    event.preventDefault(); event.stopPropagation();
+    const id = invoiceAction.dataset.id;
+    const invoice = data.invoices.find(item => item.id === id);
+    if (invoiceAction.dataset.invoiceAction === 'open') return openInvoiceDetails(id);
+    if (invoiceAction.dataset.invoiceAction === 'print') return openInvoicePrint(id);
+    if (invoiceAction.dataset.invoiceAction === 'print-now') return window.print();
+    if (invoiceAction.dataset.invoiceAction === 'back') return openInvoiceDetails(id);
+    if (invoiceAction.dataset.invoiceAction === 'payment' && invoice) {
+      openModuleForm('payment', id);
+      const paymentForm = document.querySelector('[data-module-form="payment"]');
+      if (paymentForm) paymentForm.dataset.invoiceId = id;
+      return;
+    }
+    if (invoiceAction.dataset.invoiceAction === 'email' && invoice) {
+      const client = data.clients.find(item => item.name === invoice.client);
+      if (!client?.email) return notify('Ajoutez une adresse e-mail dans la fiche client avant de préparer le message.');
+      const subject = encodeURIComponent(`Facture brouillon ${invoice.reference} — ${data.settings.companyName}`);
+      const body = encodeURIComponent(`Bonjour,\n\nVeuillez trouver ci-joint le PDF de la facture brouillon ${invoice.reference}.\n\nCordialement,\n${data.settings.companyName}\n\nPensez à joindre le PDF enregistré depuis l’aperçu.`);
+      location.href = `mailto:${encodeURIComponent(client.email)}?subject=${subject}&body=${body}`;
+      return;
+    }
+  }
   const menu = event.target.closest('[data-record-menu]');
   if (!menu) return;
   const id = menu.dataset.recordMenu;
@@ -849,10 +913,7 @@ document.addEventListener('click', event => {
   if (purchase) { openPurchaseDetails(id); return; }
   const invoice = data.invoices.find(x => x.id === id);
   if (invoice) {
-    const already = data.payments.filter(x => x.invoiceId === id).reduce((s, x) => s + Number(x.amount || 0), 0);
-    if (already >= invoice.amountTTC) return notify('Le montant du brouillon est déjà couvert par les règlements saisis.');
-    const modalForm = () => openModuleForm('payment', id);
-    modalForm(); const paymentForm = document.querySelector('[data-module-form="payment"]'); if (paymentForm) paymentForm.dataset.invoiceId = id; return;
+    return openInvoiceDetails(id);
   }
   const documentRecord = data.documents.find(x => x.id === id);
   if (documentRecord) {
@@ -1162,8 +1223,7 @@ function openGlobalSearchResult(kind, id) {
   if (kind === 'quote') { const record = data.quotes.find(item => item.id === id); if (record) { route('devis'); openQuoteDetails(id); } return; }
   if (kind === 'invoice') {
     const record = data.invoices.find(item => item.id === id); if (!record) return;
-    const paid = (data.payments || []).filter(item => item.invoiceId === id).reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    route('finances'); modal(record.reference, `<div class="detail-card"><span class="pill neutral">Brouillon local</span><p><b>Client</b><br>${esc(record.client)}</p><p><b>Chantier</b><br>${esc(siteLabel(record))}</p><p><b>Total TTC indicatif</b><br>${money(record.amountTTC)}</p><p><b>Règlements saisis</b><br>${money(paid)}</p><p><b>Reste indicatif</b><br>${money(Math.max(0, Number(record.amountTTC || 0) - paid))}</p></div>`); return;
+    route('finances'); openInvoiceDetails(id); return;
   }
   if (kind === 'purchase') { const record = data.purchases.find(item => item.id === id); if (record) { route('achats'); modal(record.reference || record.supplier, `<div class="detail-card"><p><b>Fournisseur</b><br>${esc(record.supplier)}</p><p><b>Chantier</b><br>${esc(siteLabel(record))}</p><p><b>État</b><br>${esc(record.status)}</p><p><b>Montant engagé HT</b><br>${money(record.amountHT)}</p><p><b>Livraison attendue</b><br>${esc(record.delivery || 'Non précisée')}</p></div>`); } return; }
   if (kind === 'appointment') { const record = data.appointments.find(item => item.id === id); if (record) { route('planning'); modal(record.title, `<div class="detail-card"><p><b>Chantier</b><br>${esc(siteLabel(record))}</p><p><b>Date et heure</b><br>${esc(record.date)} · ${esc(record.time)}</p><p><b>Intervenant</b><br>${esc(record.assignee)}</p><p><b>Note</b><br>${esc(record.note || 'Aucune')}</p></div>`); } return; }
