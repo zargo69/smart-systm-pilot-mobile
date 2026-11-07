@@ -1,6 +1,6 @@
 # Carte et recherche d’adresses gratuites
 
-Smart syst’m Pilot utilise Leaflet pour afficher les tuiles OpenStreetMap et Nominatim pour chercher une adresse. Aucun compte Google, clé API ou paiement n’est demandé.
+Smart syst’m Pilot utilise MapLibre GL JS pour afficher les cartes vectorielles publiques d’OpenFreeMap, et Nominatim pour chercher une adresse. Aucun compte, clé API ou paiement n’est demandé. OpenFreeMap annonce un usage commercial autorisé et une instance publique sans limite publiée, mais le service est fourni sans garantie de disponibilité ; ses conditions peuvent changer.
 
 ## Utiliser la recherche
 
@@ -10,8 +10,8 @@ La recherche est déclenchée par une action explicite : l’autocomplétion à 
 
 ## Utiliser la carte
 
-Dans **Carte**, choisissez **Afficher la carte** puis confirmez. Seules les tuiles visibles sont chargées ; OpenStreetMap reçoit la zone affichée. Les noms, clients et détails des fiches ne sont pas transmis avec les marqueurs.
+Dans **Carte**, choisissez **Afficher la carte** puis confirmez. La carte est rendue par MapLibre à partir des données vectorielles d’OpenFreeMap. Le fournisseur reçoit la zone affichée ; les noms, clients et détails des fiches ne sont pas transmis avec les marqueurs. L’attribution affiche OpenFreeMap, OpenMapTiles et OpenStreetMap.
 
-Les services publics sont gratuits et financés par la communauté, avec une capacité limitée, sans engagement de disponibilité. Ils peuvent limiter ou bloquer un usage excessif. Il n’y a pas de téléchargement hors connexion ni de préchargement de zones. Si l’application est utilisée par beaucoup de personnes ou pour un usage intensif, il faudra choisir un fournisseur de géocodage/cartes avec des conditions adaptées, qui peut être payant, ou héberger le service soi-même.
+Les fournisseurs publics sont gratuits, sans engagement de disponibilité ; OpenFreeMap indique que son instance peut être interrompue à tout moment. Nominatim interdit l’autocomplétion et impose une limite absolue d’une demande par seconde pour l’application. Si le volume devient important, configurez dans **Paramètres → Réglage avancé** un fournisseur Nominatim-compatible qui autorise cet usage. Il n’y a pas de téléchargement hors connexion ni de préchargement de zones.
 
-Consultez les [conditions d’utilisation Nominatim](https://operations.osmfoundation.org/policies/nominatim/), la [politique des tuiles OpenStreetMap](https://operations.osmfoundation.org/policies/tiles/) et les [informations de licence OpenStreetMap](https://www.openstreetmap.org/copyright).
+Consultez les [conditions d’utilisation Nominatim](https://operations.osmfoundation.org/policies/nominatim/), les [conditions d’OpenFreeMap](https://openfreemap.org/tos/), son [guide d’intégration](https://openfreemap.org/quick_start/) et les [informations de licence OpenStreetMap](https://www.openstreetmap.org/copyright).
