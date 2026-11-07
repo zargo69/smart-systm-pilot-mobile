@@ -13,9 +13,10 @@ const starterPricebook = [
 const localModulesDefault = {
   appointments: [], suppliers: [], purchases: [], invoices: [], payments: [],
   expenses: [], documents: [], reports: [], auditLogs: [], prospects: [], followups: [], pricebook: starterPricebook,
-  settings: { appName: 'Smart syst’m Pilot', companyName: 'Mon entreprise', country: 'FR', currency: 'EUR', googleMapsApiKey: '' }
+  settings: { appName: 'Smart syst’m Pilot', companyName: 'Mon entreprise', country: 'FR', currency: 'EUR' }
 };
 data = { ...localModulesDefault, ...data, settings: { ...localModulesDefault.settings, ...(data.settings || {}) } };
+delete data.settings.googleMapsApiKey;
 let planningView = 'week';
 let planningAnchor = SSPDomain.localDateISO();
 let planningSiteFilter = '';
@@ -96,7 +97,7 @@ function captureActivityChanges() {
 const eurosToCents = value => Math.round((Number(value) || 0) * 100);
 const centsToEuros = value => (Number(value) || 0) / 100;
 const todayISO = () => SSPDomain.localDateISO();
-const localNotice = `<div class="notice"><span class="notice-icon">ⓘ</span><span>Données métier locales de démonstration : elles restent dans ce navigateur, sans synchronisation ni sauvegarde distante. Exception : une adresse recherchée et la zone de carte sont transmises à Google après configuration et autorisation. Les documents produits restent des brouillons sans valeur comptable ou contractuelle.</span></div>`;
+const localNotice = `<div class="notice"><span class="notice-icon">ⓘ</span><span>Données métier locales de démonstration : elles restent dans ce navigateur, sans synchronisation ni sauvegarde distante. Si vous lancez une recherche d’adresse ou affichez la carte, la requête ou la zone visible est transmise au service public OpenStreetMap. Les documents produits restent des brouillons sans valeur comptable ou contractuelle.</span></div>`;
 const siteFromValue = value => data.sites.find(site => site.id === value || site.name === value);
 const siteLabel = record => data.sites.find(site => site.id === record.siteId)?.name || record.site || 'Chantier à rattacher';
 const siteOptions = (selected = '') => data.sites.map(s => `<option value="${esc(s.id)}" ${s.id === selected || s.name === selected ? 'selected' : ''}>${esc(s.name)}</option>`).join('') || '<option value="">Aucun chantier — créez-en un d’abord</option>';
@@ -115,51 +116,70 @@ openEditSite = function (id) {
   actions.before(coordinates);
 };
 
-async function mountGoogleAddressSearch(input) {
-  if (!input || input.dataset.googleAddressReady === 'true') return;
-  const key = String(data.settings?.googleMapsApiKey || '').trim();
-  if (!key) {
-    const note = document.createElement('small'); note.className = 'form-hint'; note.textContent = 'Pour obtenir des suggestions et placer cette adresse sur la carte, ajoutez votre clé Google Maps dans Paramètres.';
-    input.after(note); input.dataset.googleAddressReady = 'missing-key'; return;
-  }
-  input.dataset.googleAddressReady = 'loading';
+let lastAddressLookupAt = 0;
+async function searchFreeAddress(input) {
+  const form = input?.form;
+  const query = String(input?.value || '').trim();
+  if (!form || query.length < 5) return notify('Saisissez une adresse assez précise avant de lancer la recherche.');
+  const results = input.parentElement.querySelector('.address-search-results');
+  const button = input.parentElement.querySelector('[data-address-search]');
+  let cache = {}; try { cache = JSON.parse(localStorage.getItem('ssp-address-search-cache-v1') || '{}'); } catch { cache = {}; }
+  const cacheKey = `${data.settings.country}:${query.toLocaleLowerCase('fr').replace(/\s+/g, ' ')}`;
+  const cached = Array.isArray(cache[cacheKey]) ? cache[cacheKey] : null;
+  const now = Date.now();
+  if (!cached && now - lastAddressLookupAt < 1100) return notify('Patientez un instant avant une nouvelle recherche d’adresse.');
+  if (!cached) lastAddressLookupAt = now;
+  button.disabled = true; button.textContent = cached ? 'Résultats en cache…' : 'Recherche…'; results.replaceChildren();
   try {
-    await loadGoogleMaps();
-    const places = await google.maps.importLibrary('places');
-    const form = input.form; if (!form?.isConnected) return;
-    let latitude = form.elements.namedItem('latitude');
-    let longitude = form.elements.namedItem('longitude');
-    if (!latitude) { latitude = document.createElement('input'); latitude.type = 'hidden'; latitude.name = 'latitude'; form.append(latitude); }
-    if (!longitude) { longitude = document.createElement('input'); longitude.type = 'hidden'; longitude.name = 'longitude'; form.append(longitude); }
-    const host = document.createElement('div'); host.className = 'google-address-search';
-    const searchLabel = document.createElement('label'); searchLabel.className = 'google-address-label'; searchLabel.textContent = 'Rechercher une adresse avec Google';
-    const suggestion = new places.PlaceAutocompleteElement();
-    suggestion.setAttribute('placeholder', 'Rechercher et choisir une adresse avec Google');
-    suggestion.includedRegionCodes = data.settings.country === 'CH' ? ['ch'] : ['fr'];
-    host.append(suggestion); searchLabel.append(host);
-    const originalLabel = input.closest('label');
-    if (originalLabel) { originalLabel.hidden = true; originalLabel.after(searchLabel); } else input.after(searchLabel);
-    suggestion.addEventListener('gmp-select', async event => {
-      try {
-        const place = event.placePrediction.toPlace();
-        await place.fetchFields({ fields: ['formattedAddress', 'location', 'addressComponents'] });
-        if (!place.formattedAddress) return notify('Google n’a pas fourni d’adresse complète pour ce résultat.');
-        input.value = place.formattedAddress;
+    let matches = cached;
+    if (!matches) {
+      const country = data.settings.country === 'CH' ? 'ch' : 'fr';
+      const url = new URL('https://nominatim.openstreetmap.org/search');
+      url.search = new URLSearchParams({ format: 'jsonv2', addressdetails: '1', limit: '5', countrycodes: country, q: query });
+      const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 12000);
+      let response; try { response = await fetch(url, { headers: { 'Accept-Language': 'fr' }, signal: controller.signal }); } finally { clearTimeout(timeout); }
+      if (!response.ok) throw new Error(response.status === 429 ? 'Limite du service public atteinte. Réessayez plus tard.' : 'Le service d’adresses est temporairement indisponible.');
+      matches = await response.json();
+      if (Array.isArray(matches) && matches.length) {
+        cache[cacheKey] = matches.slice(0, 5);
+        const entries = Object.entries(cache); if (entries.length > 50) cache = Object.fromEntries(entries.slice(-50));
+        try { localStorage.setItem('ssp-address-search-cache-v1', JSON.stringify(cache)); } catch { /* La recherche reste utilisable si le cache est plein. */ }
+      }
+    }
+    if (!Array.isArray(matches) || !matches.length) { results.textContent = 'Aucun résultat. Essayez avec le code postal ou la ville.'; return; }
+    for (const place of matches) {
+      const option = document.createElement('button'); option.type = 'button'; option.className = 'address-search-option'; option.textContent = place.display_name || 'Adresse trouvée';
+      option.addEventListener('click', () => {
+        input.value = place.display_name || query;
         input.dispatchEvent(new Event('input', { bubbles: true }));
-        if (place.location) { latitude.value = String(place.location.lat()); longitude.value = String(place.location.lng()); }
-        const components = place.addressComponents || [];
-        const city = components.find(component => component.types.includes('locality'))?.longText || components.find(component => component.types.includes('postal_town'))?.longText;
-        const postal = components.find(component => component.types.includes('postal_code'))?.longText;
+        let lat = form.elements.namedItem('latitude'); let lon = form.elements.namedItem('longitude');
+        if (!lat) { lat = document.createElement('input'); lat.type = 'hidden'; lat.name = 'latitude'; form.append(lat); }
+        if (!lon) { lon = document.createElement('input'); lon.type = 'hidden'; lon.name = 'longitude'; form.append(lon); }
+        lat.value = String(place.lat || ''); lon.value = String(place.lon || '');
+        const addr = place.address || {};
+        const city = addr.city || addr.town || addr.village || addr.municipality || addr.suburb;
         if (city && form.elements.namedItem('city')) form.elements.namedItem('city').value = city;
-        if (postal && form.elements.namedItem('postalCode')) form.elements.namedItem('postalCode').value = postal;
-      } catch { notify('Impossible de récupérer les détails de cette adresse Google. Vérifiez la clé et les API activées.'); }
-    });
-    input.dataset.googleAddressReady = 'true';
+        if (addr.postcode && form.elements.namedItem('postalCode')) form.elements.namedItem('postalCode').value = addr.postcode;
+        results.replaceChildren();
+      });
+      results.append(option);
+    }
   } catch (error) {
-    input.dataset.googleAddressReady = 'error';
-    const note = document.createElement('small'); note.className = 'form-hint'; note.textContent = error.message;
-    input.after(note);
-  }
+    results.textContent = error.name === 'TimeoutError' ? 'La recherche a pris trop de temps. Réessayez.' : error.message || 'Impossible de rechercher cette adresse.';
+  } finally { button.disabled = false; button.textContent = 'Rechercher l’adresse'; }
+}
+
+function mountFreeAddressSearch(input) {
+  if (!input || input.dataset.freeAddressReady) return;
+  input.dataset.freeAddressReady = 'true';
+  input.placeholder = 'Adresse, code postal et ville';
+  const host = document.createElement('div'); host.className = 'address-search-controls';
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'btn secondary'; button.dataset.addressSearch = 'true'; button.textContent = 'Rechercher l’adresse';
+  button.addEventListener('click', () => searchFreeAddress(input));
+  const results = document.createElement('div'); results.className = 'address-search-results'; results.setAttribute('aria-live', 'polite');
+  host.append(button, results); input.after(host);
+  const hint = document.createElement('small'); hint.className = 'form-hint'; hint.innerHTML = 'Recherche lancée uniquement après votre clic ; pas d’autocomplétion. Service gratuit limité à un usage raisonnable. <a href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noopener noreferrer">Conditions et limites du service</a>.';
+  host.after(hint);
 }
 
 const addressFormObserver = new MutationObserver(() => {
@@ -172,7 +192,7 @@ const addressFormObserver = new MutationObserver(() => {
       label.append(address); cityLabel.after(label);
     }
   }
-  document.querySelectorAll('#modal-content form input[name="address"]').forEach(input => { if (!input.dataset.googleAddressReady) mountGoogleAddressSearch(input); });
+  document.querySelectorAll('#modal-content form input[name="address"]').forEach(mountFreeAddressSearch);
 });
 const addressModal = document.getElementById('modal-content');
 if (addressModal) addressFormObserver.observe(addressModal, { childList: true, subtree: true });
@@ -322,7 +342,7 @@ function mapPage() {
   const missing = (data.sites || []).filter(site => !located.includes(site));
   const statuses = [...new Set(located.map(site => site.status).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
   const clients = [...new Set(located.map(site => site.client).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
-  return `${heading('SUIVI OPÉRATIONNEL', 'Carte des chantiers', 'Visualisez les chantiers géolocalisés et retrouvez les adresses avec Google Maps.')}${localNotice}<section class="panel map-panel"><div class="panel-head"><div><h2>${located.length} chantier(s) localisé(s)</h2><p>${data.sites.length - located.length} adresse(s) à localiser</p></div><button class="btn primary" data-map-action="load">Afficher la carte</button></div><p class="form-hint">Google Maps charge le fond de carte après votre autorisation. Les adresses saisies dans les formulaires sont envoyées à Google pour proposer des suggestions. La clé API doit être configurée et restreinte dans Paramètres.</p>${data.sites.length ? `<div class="map-filters"><label>Rechercher un chantier<input id="map-search" type="search" placeholder="Chantier, adresse ou client"></label><label>Statut<select id="map-filter-status"><option value="Tous">Tous les statuts</option>${statuses.map(status => `<option>${esc(status)}</option>`).join('')}</select></label><label>Client<select id="map-filter-client"><option value="Tous">Tous les clients</option>${clients.map(client => `<option>${esc(client)}</option>`).join('')}</select></label><span id="map-results-count" class="map-results-count">${located.length} chantier(s) localisé(s)</span></div>` : `<p class="empty-state">Ajoutez un chantier puis choisissez son adresse dans les suggestions Google pour le placer sur la carte.</p>`}<div id="site-map" class="site-map" aria-label="Carte Google Maps des chantiers" hidden></div>${missing.length ? `<section class="map-unlocated"><h3>Adresses à compléter</h3><p>Ouvrez un chantier et choisissez une suggestion Google pour enregistrer sa position exacte.</p>${missing.map(site => `<button class="btn secondary" data-site="${esc(site.id)}">${esc(site.name)} · ${esc(site.address || 'adresse à compléter')}</button>`).join('')}</section>` : ''}<small class="map-attribution">Google Maps · Conditions et confidentialité Google</small></section>`;
+  return `${heading('SUIVI OPÉRATIONNEL', 'Carte des chantiers', 'Visualisez les chantiers localisés et recherchez gratuitement leurs adresses.')}${localNotice}<section class="panel map-panel"><div class="panel-head"><div><h2>${located.length} chantier(s) localisé(s)</h2><p>${data.sites.length - located.length} adresse(s) à localiser</p></div><button class="btn primary" data-map-action="load">Afficher la carte</button></div><p class="form-hint">Carte OpenStreetMap, sans compte ni clé API. L’affichage transmet à OpenStreetMap la zone visible. Les noms de clients et de chantiers restent dans cette application.</p>${data.sites.length ? `<div class="map-filters"><label>Rechercher un chantier<input id="map-search" type="search" placeholder="Chantier, adresse ou client"></label><label>Statut<select id="map-filter-status"><option value="Tous">Tous les statuts</option>${statuses.map(status => `<option>${esc(status)}</option>`).join('')}</select></label><label>Client<select id="map-filter-client"><option value="Tous">Tous les clients</option>${clients.map(client => `<option>${esc(client)}</option>`).join('')}</select></label><span id="map-results-count" class="map-results-count">${located.length} chantier(s) localisé(s)</span></div>` : `<p class="empty-state">Ajoutez un chantier puis recherchez son adresse pour enregistrer sa position sur la carte.</p>`}<div id="site-map" class="site-map" aria-label="Carte OpenStreetMap des chantiers" hidden></div>${missing.length ? `<section class="map-unlocated"><h3>Adresses à localiser</h3><p>Ouvrez un chantier, saisissez son adresse puis cliquez sur « Rechercher l’adresse » et choisissez le bon résultat.</p>${missing.map(site => `<button class="btn secondary" data-site="${esc(site.id)}">${esc(site.name)} · ${esc(site.address || 'adresse à compléter')}</button>`).join('')}</section>` : ''}<small class="map-attribution">© OpenStreetMap contributors · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">Licence et attribution</a></small></section>`;
 }
 
 function filteredMapSites() {
@@ -332,64 +352,61 @@ function filteredMapSites() {
   return sitesWithCoordinates().filter(site => (status === 'Tous' || site.status === status) && (client === 'Tous' || site.client === client) && (!query || `${site.name} ${site.client} ${site.address || ''} ${site.status || ''}`.toLocaleLowerCase('fr').includes(query)));
 }
 
-function loadGoogleMaps() {
-  const key = String(data.settings?.googleMapsApiKey || '').trim();
-  if (!key) return Promise.reject(new Error('Ajoutez d’abord votre clé Google Maps dans Paramètres.'));
-  if (window.google?.maps?.importLibrary) return window.google.maps.importLibrary('maps');
-  if (window.__sspGoogleMapsLoad) return window.__sspGoogleMapsLoad;
-  window.__sspGoogleMapsLoad = new Promise((resolve, reject) => {
-    window.gm_authFailure = () => reject(new Error('Google Maps a refusé la clé. Vérifiez la facturation, les API activées et les restrictions du site.'));
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&libraries=places`;
-    script.async = true;
-    script.onerror = () => reject(new Error('Google Maps ne peut pas être chargé. Vérifiez la connexion et la clé API.'));
-    script.onload = () => { if (window.google?.maps?.importLibrary) window.google.maps.importLibrary('maps').then(resolve).catch(reject); else reject(new Error('La bibliothèque Google Maps est indisponible.')); };
+function loadLeaflet() {
+  if (window.L) return Promise.resolve();
+  if (window.__sspLeafletLoad) return window.__sspLeafletLoad;
+  window.__sspLeafletLoad = new Promise((resolve, reject) => {
+    if (!document.querySelector('link[data-leaflet-css]')) {
+      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; css.dataset.leafletCss = 'true'; document.head.append(css);
+    }
+    const script = document.createElement('script'); script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; script.async = true;
+    script.onload = resolve; script.onerror = () => reject(new Error('La carte ne peut pas être chargée. Vérifiez votre connexion Internet.'));
     document.head.append(script);
   });
-  return window.__sspGoogleMapsLoad;
+  return window.__sspLeafletLoad;
 }
 
 function showMapConsent() {
-  modal('Charger Google Maps', `<div class="detail-card"><p>Google recevra la zone affichée sur la carte. Les adresses saisies dans le champ de recherche Google sont transmises à Google pour fournir les suggestions.</p><p class="form-hint">La carte nécessite une clé API Google Maps avec facturation et restrictions configurées dans Paramètres.</p><button class="btn primary full-btn" data-map-action="confirm-load">Autoriser et afficher</button><button class="btn secondary full-btn" data-map-action="cancel-load">Annuler</button></div>`);
+  modal('Charger la carte gratuite', `<div class="detail-card"><p>La carte va charger les tuiles de la zone affichée depuis OpenStreetMap. Ces demandes peuvent révéler la zone que vous consultez. Les noms et détails des chantiers restent dans l’application.</p><p class="form-hint">Le service est gratuit selon sa politique d’utilisation ; il est soumis à des limites et n’offre pas de garantie de disponibilité. Aucun compte ni clé API ne sont requis. <a href="https://operations.osmfoundation.org/policies/tiles/" target="_blank" rel="noopener noreferrer">Lire les conditions des cartes OpenStreetMap</a>.</p><button class="btn primary full-btn" data-map-action="confirm-load">Autoriser et afficher</button><button class="btn secondary full-btn" data-map-action="cancel-load">Annuler</button></div>`);
 }
 
 async function initializeSiteMap() {
   const container = $('#site-map'); if (!container) return;
-  let maps;
-  try { maps = await loadGoogleMaps(); } catch (error) { return notify(error.message); }
+  try { await loadLeaflet(); } catch (error) { return notify(error.message); }
   container.hidden = false;
   const sites = sitesWithCoordinates();
   const first = sites[0];
-  const map = new maps.Map(container, { center: first ? { lat: Number(first.latitude), lng: Number(first.longitude) } : { lat: 46.6, lng: 2.4 }, zoom: first ? 9 : 6, mapTypeControl: false, streetViewControl: false, fullscreenControl: true, gestureHandling: 'cooperative' });
-  window.__sspMap = map; window.__sspGoogleMarkers = [];
+  if (window.__sspMap) { window.__sspMap.remove(); window.__sspMap = null; }
+  const map = L.map(container, { scrollWheelZoom: false, maxZoom: 18 }).setView(first ? [Number(first.latitude), Number(first.longitude)] : [46.6, 2.4], first ? 10 : 6);
+  window.__sspMap = map;
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' }).addTo(map);
+  window.__sspMapMarkers = L.layerGroup().addTo(map);
   refreshSiteMapMarkers();
-  setTimeout(() => window.google?.maps?.event?.trigger(map, 'resize'), 150);
+  if (sites.length > 1) map.fitBounds(L.latLngBounds(sites.map(site => [Number(site.latitude), Number(site.longitude)])).pad(0.18));
+  setTimeout(() => map.invalidateSize(), 100);
 }
 
 function refreshSiteMapMarkers({ fitView = false } = {}) {
   const map = window.__sspMap;
+  const markerGroup = window.__sspMapMarkers;
   const sites = filteredMapSites();
   const count = $('#map-results-count');
   if (count) count.textContent = `${sites.length} chantier(s) localisé(s)`;
-  if (!map || !$('#site-map')) return;
-  for (const marker of window.__sspGoogleMarkers || []) marker.setMap(null);
-  window.__sspGoogleMarkers = [];
+  if (!map || !markerGroup || !$('#site-map')) return;
+  markerGroup.clearLayers();
   if (!sites.length) return;
   if (fitView) {
-    if (sites.length === 1) { map.setCenter({ lat: Number(sites[0].latitude), lng: Number(sites[0].longitude) }); map.setZoom(14); }
-    else { const bounds = new google.maps.LatLngBounds(); sites.forEach(site => bounds.extend({ lat: Number(site.latitude), lng: Number(site.longitude) })); map.fitBounds(bounds, 48); }
+    if (sites.length === 1) map.setView([Number(sites[0].latitude), Number(sites[0].longitude)], 14);
+    else map.fitBounds(L.latLngBounds(sites.map(site => [Number(site.latitude), Number(site.longitude)]) ).pad(0.12));
   }
-  const info = new google.maps.InfoWindow();
   for (const site of sites) {
-    const pinColor = site.status === 'En cours' ? '#078b70' : site.status === 'Bloqué' ? '#dc6256' : site.status === 'Terminé' ? '#7b8990' : '#3867d6';
-    const marker = new google.maps.Marker({ map, position: { lat: Number(site.latitude), lng: Number(site.longitude) }, title: `${site.name} · ${site.status || 'Chantier'}`, icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: pinColor, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2, scale: 8 } });
-    marker.addListener('click', () => {
-      const upcoming = (data.appointments || []).filter(item => (item.siteId === site.id || item.site === site.name) && item.date >= todayISO() && !['Terminée','Annulée'].includes(item.status)).sort((a,b) => `${a.date} ${a.time || ''}`.localeCompare(`${b.date} ${b.time || ''}`)).slice(0, 2);
-      const next = upcoming.length ? `<br>Prochaine intervention : ${upcoming.map(item => `${esc(item.date)} · ${esc(item.title)}`).join('<br>')}` : '';
-      info.setContent(`<b>${esc(site.name)}</b><br>${esc(site.status || 'Statut non renseigné')}<br>${esc(site.address || 'Adresse non renseignée')}${next}<br><a href="#chantiers" data-open-site="${esc(site.id)}">Ouvrir le dossier</a>`);
-      info.open({ map, anchor: marker });
-    });
-    window.__sspGoogleMarkers.push(marker);
+    const upcoming = (data.appointments || []).filter(item => (item.siteId === site.id || item.site === site.name) && item.date >= todayISO() && !['Terminée','Annulée'].includes(item.status)).sort((a,b) => `${a.date} ${a.time || ''}`.localeCompare(`${b.date} ${b.time || ''}`)).slice(0, 2);
+    const next = upcoming.length ? `<br><small>Prochaine intervention : ${upcoming.map(item => `${esc(item.date)} · ${esc(item.title)}`).join('<br>')}</small>` : '';
+    const color = site.status === 'En cours' ? '#078b70' : site.status === 'Bloqué' ? '#dc6256' : site.status === 'Terminé' ? '#7b8990' : '#3867d6';
+    const marker = L.circleMarker([Number(site.latitude), Number(site.longitude)], { radius: 8, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1 });
+    marker.bindPopup(`<b>${esc(site.name)}</b><br>${esc(site.status || 'Chantier')}<br>${esc(site.address || 'Adresse non renseignée')}${next}<br><button class="map-popup-open" type="button" data-open-site="${esc(site.id)}">Ouvrir le dossier</button>`);
+    marker.addTo(markerGroup);
+    marker.on('popupopen', event => event.popup.getElement()?.querySelector('[data-open-site]')?.addEventListener('click', () => { route('chantiers'); showSite(site.id); }));
   }
 }
 
@@ -552,7 +569,7 @@ setInterval(() => { if (document.visibilityState === 'visible') dispatchDueBrows
 
 function settingsPage() {
   let priorRestore = null; try { priorRestore = localStorage.getItem('ssp-pre-restore-backup-v1'); } catch { /* Le stockage local peut être indisponible. */ }
-  return `${heading('VOTRE ESPACE', 'Paramètres', 'Personnalisez les informations locales de l’entreprise.')} ${localNotice}<section class="panel settings-form"><form data-module-form="settings"><label>Nom de l’application<input name="appName" required maxlength="80" value="${esc(data.settings.appName)}"></label><label>Nom de l’entreprise<input name="companyName" required maxlength="120" value="${esc(data.settings.companyName)}"></label><div class="form-row"><label>Pays de référence<select name="country"><option value="FR" ${data.settings.country === 'FR' ? 'selected' : ''}>France</option><option value="CH" ${data.settings.country === 'CH' ? 'selected' : ''}>Suisse</option></select></label><label>Devise par défaut<select name="currency"><option value="EUR" ${data.settings.currency === 'EUR' ? 'selected' : ''}>EUR · Euro</option><option value="CHF" ${data.settings.currency === 'CHF' ? 'selected' : ''}>CHF · Franc suisse</option></select></label></div><label>Clé API Google Maps<input name="googleMapsApiKey" type="password" autocomplete="off" value="${esc(data.settings.googleMapsApiKey || '')}" placeholder="Collez votre clé API restreinte"></label><p class="form-hint">N’ajoutez ici qu’une clé limitée à Google Maps JavaScript API et Places API, avec restriction HTTP au domaine zargo69.github.io. Cette clé est enregistrée dans ce navigateur et devient visible dans le code chargé par celui-ci. La facturation Google doit être activée. Ne mettez pas une clé non restreinte dans ce champ.</p><p class="form-hint">Les règles fiscales ne sont pas calculées automatiquement par ce réglage.</p><button class="btn primary">Enregistrer</button></form></section><section class="panel"><div class="panel-head"><div><h2>Copie de sauvegarde locale</h2><p>Exportez puis restaurez une copie JSON de ce navigateur.</p></div><button class="btn secondary" data-module-action="export">Exporter mes données</button></div><label class="import-label">Restaurer une copie<input id="import-file" type="file" accept="application/json,.json"></label><p class="form-hint">Avant de remplacer les données, l’application conserve automatiquement une copie locale de l’état actuel. Téléchargez-la ci-dessous si vous voulez garder un fichier externe.</p>${priorRestore ? '<button class="btn secondary" data-module-action="export-restore-backup">Télécharger la copie précédant la restauration</button>' : ''}<p class="form-hint">Le fichier peut contenir des coordonnées personnelles ; conservez-le dans un endroit sûr.</p><button class="btn danger" data-module-action="clear">Effacer les données locales</button></section>`;
+  return `${heading('VOTRE ESPACE', 'Paramètres', 'Personnalisez les informations locales de l’entreprise.')} ${localNotice}<section class="panel settings-form"><form data-module-form="settings"><label>Nom de l’application<input name="appName" required maxlength="80" value="${esc(data.settings.appName)}"></label><label>Nom de l’entreprise<input name="companyName" required maxlength="120" value="${esc(data.settings.companyName)}"></label><div class="form-row"><label>Pays de référence<select name="country"><option value="FR" ${data.settings.country === 'FR' ? 'selected' : ''}>France</option><option value="CH" ${data.settings.country === 'CH' ? 'selected' : ''}>Suisse</option></select></label><label>Devise par défaut<select name="currency"><option value="EUR" ${data.settings.currency === 'EUR' ? 'selected' : ''}>EUR · Euro</option><option value="CHF" ${data.settings.currency === 'CHF' ? 'selected' : ''}>CHF · Franc suisse</option></select></label></div><p class="form-hint">La carte et la recherche d’adresse utilisent OpenStreetMap sans clé API ni abonnement. La recherche n’est envoyée qu’après votre clic ; l’affichage de la carte transmet au fournisseur la zone visible. Ces services gratuits sont soumis à des limites d’usage et à leur disponibilité.</p><p class="form-hint">Les règles fiscales ne sont pas calculées automatiquement par ce réglage.</p><button class="btn primary">Enregistrer</button></form></section><section class="panel"><div class="panel-head"><div><h2>Copie de sauvegarde locale</h2><p>Exportez puis restaurez une copie JSON de ce navigateur.</p></div><button class="btn secondary" data-module-action="export">Exporter mes données</button></div><label class="import-label">Restaurer une copie<input id="import-file" type="file" accept="application/json,.json"></label><p class="form-hint">Avant de remplacer les données, l’application conserve automatiquement une copie locale de l’état actuel. Téléchargez-la ci-dessous si vous voulez garder un fichier externe.</p>${priorRestore ? '<button class="btn secondary" data-module-action="export-restore-backup">Télécharger la copie précédant la restauration</button>' : ''}<p class="form-hint">Le fichier peut contenir des coordonnées personnelles ; conservez-le dans un endroit sûr.</p><button class="btn danger" data-module-action="clear">Effacer les données locales</button></section>`;
 }
 
 function moduleForm(type, title, content) {
@@ -707,10 +724,8 @@ function openModuleForm(type, selectedId = '') {
 function storeModuleForm(form, fileData = null) {
   const type = form.dataset.moduleForm;
   const values = Object.fromEntries(new FormData(form));
-  const previousMapsKey = String(data.settings?.googleMapsApiKey || '').trim();
   if (type === 'settings') {
-    data.settings = { ...data.settings, appName: values.appName.trim(), companyName: values.companyName.trim(), country: values.country, currency: values.currency, googleMapsApiKey: String(values.googleMapsApiKey || '').trim() };
-    window.__sspGoogleMapsLoad = null;
+    data.settings = { ...data.settings, appName: values.appName.trim(), companyName: values.companyName.trim(), country: values.country, currency: values.currency };
     applyBrandSettings();
   }
   if (type === 'supplier') {
@@ -806,7 +821,6 @@ function storeModuleForm(form, fileData = null) {
     recordDocumentAudit('reports', record, 'Modifié');
   }
   if (!save()) return;
-  if (type === 'settings' && previousMapsKey !== String(data.settings.googleMapsApiKey || '').trim()) { location.reload(); return; }
   clearFormDraft(form); closeModal(); render(); notify('Enregistré sur cet appareil.');
 }
 
