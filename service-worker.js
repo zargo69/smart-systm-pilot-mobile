@@ -1,4 +1,4 @@
-const CACHE = 'smart-systm-pilot-shell-v48';
+const CACHE = 'smart-systm-pilot-shell-v50';
 const SHELL = ['./', './index.html', './styles.css', './ui-fixes.css', './design-system.css', './domain.js', './app.js', './modules.js', './quotes.js', './operations.js', './auth.js', './service-worker.js', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', event => {
