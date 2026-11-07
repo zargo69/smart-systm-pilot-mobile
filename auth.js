@@ -31,6 +31,13 @@
     }
   }
 
+  function recordAccountChange(action, account) {
+    if (!account || typeof window.recordActivityAudit !== 'function' || typeof save !== 'function') return;
+    const actor = currentAccount || account;
+    window.recordActivityAudit('accounts', { id: account.id, name: `${account.displayName} (${account.username})` }, action, { actorId: actor.id || '', actorName: actor.displayName || 'Compte local', actorUsername: actor.username || '' });
+    save();
+  }
+
   function readSession() {
     try {
       const value = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
@@ -161,7 +168,7 @@
       if (accounts.some(item => item.id !== account.id && normalizeEmail(item.email) === email)) return showMessage('Cette adresse e-mail est déjà associée à un autre profil.');
       const previous = account.email;
       account.email = email;
-      if (saveAccounts()) openApp(account);
+      if (saveAccounts()) { recordAccountChange('Modifié', account); openApp(account); }
       else account.email = previous;
     });
   }
@@ -186,6 +193,7 @@
       account.salt = randomHex();
       account.hash = await passwordHash(values.password, account.salt);
       if (!saveAccounts()) { accounts = before; return; }
+      recordAccountChange('Mot de passe réinitialisé', account);
       renderGate('Mot de passe modifié sur cet appareil. Connectez-vous avec votre adresse e-mail.');
     } catch { accounts = before; showMessage('La réinitialisation locale a échoué. Réessayez sur une adresse sécurisée.'); }
   }
@@ -244,6 +252,7 @@
       const account = { id: `account-${randomHex(16)}`, username, email, displayName: values.displayName.trim(), role: 'admin', active: true, salt, hash: await passwordHash(values.password, salt), createdAt: new Date().toISOString() };
       accounts = [account];
       if (!saveAccounts()) { accounts = []; return; }
+      recordAccountChange('Ajouté', account);
       openApp(account);
     } catch {
       showMessage('La création locale des comptes nécessite un navigateur récent et une adresse sécurisée (HTTPS ou localhost).');
@@ -311,7 +320,7 @@
     if (button.dataset.authAction === 'cancel') { const shell = document.querySelector('#account-form-shell'); if (shell) shell.hidden = true; }
     if (button.dataset.authAction === 'toggle' && account && account.role !== 'admin' && account.id !== currentAccount.id) {
       account.active = account.active === false;
-      if (saveAccounts()) refreshSettings();
+      if (saveAccounts()) { recordAccountChange(account.active ? 'Réactivé' : 'Désactivé', account); refreshSettings(); }
     }
   });
   for (const eventName of ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart', 'click', 'input', 'change']) {
@@ -356,6 +365,7 @@
     if (values.password && passwordRuleError(values.password)) { message.textContent = passwordRuleError(values.password); return; }
     if (values.password && values.password !== values.passwordConfirm) { message.textContent = 'Les deux mots de passe ne correspondent pas.'; return; }
     const before = accounts.map(account => ({ ...account }));
+    let changedAccount = current;
     try {
       if (current) {
         current.username = username;
@@ -365,9 +375,11 @@
         if (values.password) { current.salt = randomHex(); current.hash = await passwordHash(values.password, current.salt); }
       } else {
         const salt = randomHex();
-        accounts.push({ id: `account-${randomHex(16)}`, username, email, displayName: values.displayName.trim(), role: 'member', active: form.elements.active.checked, salt, hash: await passwordHash(values.password, salt), createdAt: new Date().toISOString() });
+        changedAccount = { id: `account-${randomHex(16)}`, username, email, displayName: values.displayName.trim(), role: 'member', active: form.elements.active.checked, salt, hash: await passwordHash(values.password, salt), createdAt: new Date().toISOString() };
+        accounts.push(changedAccount);
       }
       if (!saveAccounts()) { accounts = before; return; }
+      recordAccountChange(current ? 'Modifié' : 'Ajouté', changedAccount);
       currentAccount = accounts.find(account => account.id === currentAccount.id);
       updateProfile(); refreshSettings();
     } catch {
