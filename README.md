@@ -41,9 +41,7 @@ L’interface reprend les couleurs de marque du logo : bleu cobalt, indigo et ja
 - Assistant de pilotage : contrôles locaux par règles simples (devis à suivre, échéances renseignées, budgets saisis, interventions proches, prix manquants et GPS absent). Ce n’est pas une IA générative et aucune donnée n’est transmise.
 - Application progressive : cache de l’interface après une première ouverture en HTTPS ou sur `localhost`. Seule l’interface est mise en cache.
 
-Pour les étapes détaillées et les limites, voir [le guide utilisateur](guide-utilisateur.md) et [l’état réel du livrable](etat-et-limites.md).
-
-Pour une lecture exigence par exigence du prompt maître et des 18 scénarios minimums, voir [l’audit de conformité](audit-prompt-maitre.md).
+Pour les étapes détaillées et les limites, voir le [guide utilisateur](guide-utilisateur.md) et le [guide carte et adresses](carte-gratuite.md).
 
 ## Limites qui empêchent l’usage réel en entreprise
 
