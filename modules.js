@@ -22,6 +22,7 @@ let planningAnchor = SSPDomain.localDateISO();
 let planningSiteFilter = '';
 let planningAssigneeFilter = '';
 let documentsView = 'active';
+let siteMapBasemap = 'streets';
 for (const key of Object.keys(localModulesDefault)) {
   if (Array.isArray(localModulesDefault[key]) && !Array.isArray(data[key])) data[key] = [];
 }
@@ -343,7 +344,7 @@ function mapPage() {
   const missing = (data.sites || []).filter(site => !located.includes(site));
   const statuses = [...new Set(located.map(site => site.status).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
   const clients = [...new Set(located.map(site => site.client).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
-  return `${heading('SUIVI OPÉRATIONNEL', 'Carte des chantiers', 'Visualisez les chantiers localisés et recherchez gratuitement leurs adresses.')}${localNotice}<section class="panel map-panel"><div class="panel-head"><div><h2>${located.length} chantier(s) localisé(s)</h2><p>${data.sites.length - located.length} adresse(s) à localiser</p></div><button class="btn primary" data-map-action="load">Afficher la carte</button></div><p class="form-hint">Carte OpenFreeMap fondée sur les données OpenStreetMap, sans compte ni clé API. La zone affichée est transmise au fournisseur ; les noms de clients et de chantiers restent dans cette application.</p>${data.sites.length ? `<div class="map-filters"><label>Rechercher un chantier<input id="map-search" type="search" placeholder="Chantier, adresse ou client"></label><label>Statut<select id="map-filter-status"><option value="Tous">Tous les statuts</option>${statuses.map(status => `<option>${esc(status)}</option>`).join('')}</select></label><label>Client<select id="map-filter-client"><option value="Tous">Tous les clients</option>${clients.map(client => `<option>${esc(client)}</option>`).join('')}</select></label><span id="map-results-count" class="map-results-count">${located.length} chantier(s) localisé(s)</span></div>` : `<p class="empty-state">Ajoutez un chantier puis recherchez son adresse pour enregistrer sa position sur la carte.</p>`}<div id="site-map" class="site-map" aria-label="Carte OpenFreeMap des chantiers" hidden></div>${missing.length ? `<section class="map-unlocated"><h3>Adresses à localiser</h3><p>Ouvrez un chantier, saisissez son adresse puis cliquez sur « Rechercher l’adresse » et choisissez le bon résultat.</p>${missing.map(site => `<button class="btn secondary" data-site="${esc(site.id)}">${esc(site.name)} · ${esc(site.address || 'adresse à compléter')}</button>`).join('')}</section>` : ''}<small class="map-attribution"><a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> · © <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a> · Données © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></small></section>`;
+  return `${heading('SUIVI OPÉRATIONNEL', 'Carte des chantiers', 'Visualisez les chantiers localisés et recherchez gratuitement leurs adresses.')}${localNotice}<section class="panel map-panel"><div class="panel-head"><div><h2>${located.length} chantier(s) localisé(s)</h2><p>${data.sites.length - located.length} adresse(s) à localiser</p></div><button class="btn primary" data-map-action="load">Afficher la carte</button></div><p class="form-hint">Choisissez le plan de rue gratuit ou l’imagerie satellite Sentinel‑2 de 2016. Cette image mondiale est ancienne et moins précise qu’une vue aérienne récente. La zone visible est transmise au fournisseur ; les noms et détails des chantiers restent dans cette application.</p><div class="map-basemap-switch" role="group" aria-label="Fond de carte"><button type="button" data-map-action="basemap-streets" aria-pressed="${siteMapBasemap === 'streets'}" class="${siteMapBasemap === 'streets' ? 'active' : ''}">Plan de rue</button><button type="button" data-map-action="basemap-satellite" aria-pressed="${siteMapBasemap === 'satellite'}" class="${siteMapBasemap === 'satellite' ? 'active' : ''}">Satellite · 2016</button></div>${data.sites.length ? `<div class="map-filters"><label>Rechercher un chantier<input id="map-search" type="search" placeholder="Chantier, adresse ou client"></label><label>Statut<select id="map-filter-status"><option value="Tous">Tous les statuts</option>${statuses.map(status => `<option>${esc(status)}</option>`).join('')}</select></label><label>Client<select id="map-filter-client"><option value="Tous">Tous les clients</option>${clients.map(client => `<option>${esc(client)}</option>`).join('')}</select></label><span id="map-results-count" class="map-results-count">${located.length} chantier(s) localisé(s)</span></div>` : `<p class="empty-state">Ajoutez un chantier puis recherchez son adresse pour enregistrer sa position sur la carte.</p>`}<div id="site-map" class="site-map" aria-label="Carte des chantiers" hidden></div>${missing.length ? `<section class="map-unlocated"><h3>Adresses à localiser</h3><p>Ouvrez un chantier, saisissez son adresse puis cliquez sur « Rechercher l’adresse » et choisissez le bon résultat.</p>${missing.map(site => `<button class="btn secondary" data-site="${esc(site.id)}">${esc(site.name)} · ${esc(site.address || 'adresse à compléter')}</button>`).join('')}</section>` : ''}<small class="map-attribution"><span class="map-credit-streets"><a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> · © <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a> · Données © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></span><span class="map-credit-satellite">EOxCloudless · <a href="https://cloudless.eox.at/documentation/faq" target="_blank" rel="noopener noreferrer">Imagerie Sentinel‑2 2016, CC BY 4.0</a> · Données Copernicus modifiées par EOX</span></small></section>`;
 }
 
 function filteredMapSites() {
@@ -366,7 +367,23 @@ function loadMapLibre() {
 }
 
 function showMapConsent() {
-  modal('Charger la carte gratuite', `<div class="detail-card"><p>La carte va charger les tuiles vectorielles depuis OpenFreeMap. Le fournisseur peut voir la zone consultée ; les noms et détails des chantiers restent dans l’application.</p><p class="form-hint">Le service public est gratuit, sans clé API. Il est fourni sans garantie de disponibilité et peut évoluer ou être interrompu. <a href="https://openfreemap.org/tos/" target="_blank" rel="noopener noreferrer">Conditions d’utilisation</a> · <a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">À propos et attribution</a>.</p><button class="btn primary full-btn" data-map-action="confirm-load">Autoriser et afficher</button><button class="btn secondary full-btn" data-map-action="cancel-load">Annuler</button></div>`);
+  modal('Charger la carte gratuite', `<div class="detail-card"><p>Le plan de rue utilise OpenFreeMap. La vue satellite utilise l’imagerie mondiale Sentinel‑2 de 2016 fournie par EOxCloudless, sans clé API et sous licence CC BY 4.0. Elle est gratuite, mais ancienne, moins détaillée qu’une imagerie récente et sans garantie de disponibilité.</p><p class="form-hint">Les fournisseurs reçoivent la zone consultée. Les noms des clients et des chantiers restent dans l’application. <a href="https://openfreemap.org/tos/" target="_blank" rel="noopener noreferrer">Conditions OpenFreeMap</a> · <a href="https://cloudless.eox.at/documentation/faq" target="_blank" rel="noopener noreferrer">Licence et limites EOxCloudless</a>.</p><button class="btn primary full-btn" data-map-action="confirm-load">Autoriser et afficher</button><button class="btn secondary full-btn" data-map-action="cancel-load">Annuler</button></div>`);
+}
+
+function satelliteMapStyle() {
+  return { version: 8, sources: { eoxSatellite: { type: 'raster', tiles: ['https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg'], tileSize: 256, maxzoom: 14, attribution: 'EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016)' } }, layers: [{ id: 'eox-satellite', type: 'raster', source: 'eoxSatellite', minzoom: 0, maxzoom: 22 }] };
+}
+
+function setSiteMapBasemap(mode) {
+  siteMapBasemap = mode;
+  document.querySelectorAll('[data-map-action^="basemap-"]').forEach(button => {
+    const active = button.dataset.mapAction === `basemap-${mode}`;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  document.querySelectorAll('.map-attribution').forEach(el => el.classList.toggle('is-satellite', mode === 'satellite'));
+  const map = window.__sspMap;
+  if (map) map.setStyle(mode === 'satellite' ? satelliteMapStyle() : 'https://tiles.openfreemap.org/styles/liberty');
 }
 
 async function initializeSiteMap() {
@@ -377,7 +394,8 @@ async function initializeSiteMap() {
   const first = sites[0];
   if (window.__sspMap) { window.__sspMap.remove(); window.__sspMap = null; }
   container.replaceChildren();
-  const map = new maplibregl.Map({ container, style: 'https://tiles.openfreemap.org/styles/liberty', center: first ? [Number(first.longitude), Number(first.latitude)] : [2.4, 46.6], zoom: first ? 10 : 6, maxZoom: 18, attributionControl: { compact: true }, cooperativeGestures: true });
+  const map = new maplibregl.Map({ container, style: siteMapBasemap === 'satellite' ? satelliteMapStyle() : 'https://tiles.openfreemap.org/styles/liberty', center: first ? [Number(first.longitude), Number(first.latitude)] : [2.4, 46.6], zoom: first ? 10 : 6, maxZoom: 18, attributionControl: { compact: true }, cooperativeGestures: true });
+  document.querySelectorAll('.map-attribution').forEach(el => el.classList.toggle('is-satellite', siteMapBasemap === 'satellite'));
   window.__sspMap = map;
   window.__sspMapMarkers = [];
   let mapErrorShown = false;
@@ -1010,6 +1028,8 @@ document.addEventListener('click', event => {
     if (sessionStorage.getItem('ssp-map-consent') === '1') return initializeSiteMap();
     return showMapConsent();
   }
+  if (button.dataset.mapAction === 'basemap-streets') return setSiteMapBasemap('streets');
+  if (button.dataset.mapAction === 'basemap-satellite') return setSiteMapBasemap('satellite');
   if (button.dataset.mapAction === 'cancel-load') return closeModal();
   if (button.dataset.mapAction === 'confirm-load') {
     sessionStorage.setItem('ssp-map-consent', '1'); closeModal(); return initializeSiteMap();
