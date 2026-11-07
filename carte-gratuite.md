@@ -6,7 +6,7 @@ Smart syst’m Pilot utilise Leaflet pour afficher les tuiles OpenStreetMap et N
 
 Dans une fiche client ou chantier, saisissez une adresse suffisamment précise, puis cliquez sur **Rechercher l’adresse**. Choisissez l’un des résultats pour remplir l’adresse, la ville, le code postal si disponible et les coordonnées GPS. Enregistrez la fiche pour garder les informations dans le stockage local du navigateur.
 
-La recherche est déclenchée par une action explicite : l’autocomplétion à chaque frappe n’est pas autorisée par le service public Nominatim. Les résultats sélectionnés sont mis en cache localement. Les demandes envoyées par cette application doivent rester très modérées et ne jamais dépasser une requête par seconde pour l’ensemble du site. Une recherche envoie le texte de l’adresse à Nominatim.
+La recherche est déclenchée par une action explicite : l’autocomplétion à chaque frappe n’est pas autorisée par le service public Nominatim. Les résultats sélectionnés sont mis en cache localement. Les demandes envoyées par cette application doivent rester très modérées et ne jamais dépasser une requête par seconde pour l’ensemble du site. Une recherche envoie le texte de l’adresse au service configuré. Dans **Paramètres → Réglage avancé du service de recherche d’adresse**, l’adresse HTTPS du fournisseur peut être remplacée par celle d’un service compatible Nominatim, sans modifier le code.
 
 ## Utiliser la carte
 
