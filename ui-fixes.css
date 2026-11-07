@@ -515,9 +515,11 @@
 }
 
 
-/* Google Places address suggestions */
-.google-address-label { display: block; width: 100%; margin-top: 8px; color: #5e7076; font-size: 12px; font-weight: 600; line-height: 1.4; }
-.google-address-search { width: 100%; margin: 7px 0 4px; }
-.google-address-search gmp-place-autocomplete { display: block; width: 100%; min-width: 0; font: inherit; }
-.google-address-search gmp-place-autocomplete::part(input) { box-sizing: border-box; width: 100%; min-height: 42px; border: 1px solid #dce5e8; border-radius: 9px; padding: 0 12px; color: #243d4b; font: inherit; }
-.google-address-search gmp-place-autocomplete:focus-within::part(input) { outline: 3px solid #3867d633; border-color: #3867d6; }
+/* Recherche d'adresse gratuite, déclenchée explicitement */
+.address-search-controls { display: grid; gap: 8px; margin: 8px 0 4px; }
+.address-search-controls .btn { justify-self: start; min-height: 42px; }
+.address-search-results { display: grid; gap: 6px; }
+.address-search-option { width: 100%; border: 1px solid #dce5e8; border-radius: 9px; padding: 10px 12px; background: #fff; color: #243d4b; text-align: left; line-height: 1.4; cursor: pointer; }
+.address-search-option:hover, .address-search-option:focus-visible { border-color: #3867d6; background: #f3f6ff; outline: 2px solid #3867d633; }
+.address-search-results:empty { display: none; }
+.map-popup-open { display: inline-block; margin-top: 6px; border: 0; background: none; color: #3157b7; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
