@@ -96,7 +96,7 @@ function captureActivityChanges() {
 const eurosToCents = value => Math.round((Number(value) || 0) * 100);
 const centsToEuros = value => (Number(value) || 0) / 100;
 const todayISO = () => SSPDomain.localDateISO();
-const localNotice = `<div class="notice"><span class="notice-icon">ⓘ</span><span>Données locales de démonstration : elles restent dans ce navigateur, sans partage ni sauvegarde distante et sans valeur comptable ou contractuelle.</span></div>`;
+const localNotice = `<div class="notice"><span class="notice-icon">ⓘ</span><span>Données métier locales de démonstration : elles restent dans ce navigateur, sans synchronisation ni sauvegarde distante. Exception : une adresse recherchée et la zone de carte sont transmises à Google après configuration et autorisation. Les documents produits restent des brouillons sans valeur comptable ou contractuelle.</span></div>`;
 const siteFromValue = value => data.sites.find(site => site.id === value || site.name === value);
 const siteLabel = record => data.sites.find(site => site.id === record.siteId)?.name || record.site || 'Chantier à rattacher';
 const siteOptions = (selected = '') => data.sites.map(s => `<option value="${esc(s.id)}" ${s.id === selected || s.name === selected ? 'selected' : ''}>${esc(s.name)}</option>`).join('') || '<option value="">Aucun chantier — créez-en un d’abord</option>';
