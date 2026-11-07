@@ -1,5 +1,5 @@
-const CACHE = 'smart-systm-pilot-shell-v50';
-const SHELL = ['./', './index.html', './styles.css', './ui-fixes.css', './design-system.css', './domain.js', './app.js', './modules.js', './quotes.js', './operations.js', './auth.js', './service-worker.js', './manifest.webmanifest', './icon.svg'];
+const CACHE = 'smart-systm-pilot-shell-v51';
+const SHELL = ['./', './index.html', './styles.css', './ui-fixes.css', './design-system.css', './domain.js', './app.js', './modules.js', './quotes.js', './operations.js', './auth.js', './service-worker.js', './manifest.webmanifest', './icon.svg', './favicon-32.png', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
