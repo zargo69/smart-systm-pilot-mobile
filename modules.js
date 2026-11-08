@@ -98,6 +98,12 @@ function captureActivityChanges() {
 const eurosToCents = value => Math.round((Number(value) || 0) * 100);
 const centsToEuros = value => (Number(value) || 0) / 100;
 const todayISO = () => SSPDomain.localDateISO();
+function planningISO(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 const localNotice = `<div class="notice"><span class="notice-icon">ⓘ</span><span>Données métier locales de démonstration : elles restent dans ce navigateur, sans synchronisation ni sauvegarde distante. Si vous lancez une recherche d’adresse ou affichez la carte, la requête ou la zone visible est transmise au fournisseur sélectionné. Les noms et détails des dossiers ne sont pas envoyés avec les repères. Les documents produits restent des brouillons sans valeur comptable ou contractuelle.</span></div>`;
 const siteFromValue = value => data.sites.find(site => site.id === value || site.name === value);
 const siteLabel = record => data.sites.find(site => site.id === record.siteId)?.name || record.site || 'Chantier à rattacher';
@@ -332,6 +338,62 @@ function dashboardPage() {
   return `${header}${recovery}<section class="metric-grid dashboard-metrics" aria-label="Résumé de l’activité"><article class="metric-card"><div class="metric-label">Chantiers actifs</div><strong>${activeSites.length}</strong><div class="metric-note">Dossiers non terminés</div><a href="#chantiers" data-page="chantiers">Voir les chantiers <span>→</span></a></article><article class="metric-card"><div class="metric-label">Interventions à venir</div><strong>${appointments.length}</strong><div class="metric-note">Dates issues du planning</div><a href="#planning" data-page="planning">Voir le planning <span>→</span></a></article><article class="metric-card"><div class="metric-label">Devis à suivre</div><strong>${quotesToFollow.length}</strong><div class="metric-note">Brouillons à vérifier ou devis envoyés</div><a href="#devis" data-page="devis">Voir les devis <span>→</span></a></article><article class="metric-card"><div class="metric-label">Factures brouillon</div><strong>${draftInvoices.length}</strong><div class="metric-note">À vérifier avant toute utilisation</div><a href="#devis" data-page="devis">Voir les factures <span>→</span></a></article></section><section class="content-grid dashboard-content-grid"><article class="panel"><div class="panel-head"><div><h2>Chantiers à suivre</h2><p>${activeSites.length} dossier(s) actif(s)</p></div><a href="#chantiers" data-page="chantiers" class="text-link">Tout voir →</a></div><div class="site-list">${siteRows}</div></article><article class="panel"><div class="panel-head"><div><h2>Prochaines interventions</h2><p>Rendez-vous enregistrés dans le planning</p></div><a href="#planning" data-page="planning" class="text-link">Planning →</a></div><div class="dashboard-event-list">${appointmentRows}</div><button class="btn secondary dashboard-quick-plan" data-action="quick-appointment">＋ Planifier une intervention</button></article></section><section class="dashboard-next-actions"><div><span class="metric-symbol purple">▤</span><b>Préparer un devis</b><small>Montants et mentions à vérifier avant envoi</small><button class="btn secondary" data-action="add-quote">Nouveau devis</button></div><div><span class="metric-symbol green">♙</span><b>Compléter les clients</b><small>${(data.clients || []).length} fiche(s) enregistrée(s)</small><button class="btn secondary" data-action="add-client">Nouveau client</button></div><div><span class="metric-symbol cyan">⌖</span><b>Ajouter un chantier</b><small>Localisez les dossiers avec une adresse vérifiée</small><button class="btn secondary" data-action="add-site">Nouveau chantier</button></div></section>`;
 }
 
+function showAppointmentDetails(id) {
+  const appointment = (data.appointments || []).find(item => item.id === id);
+  if (!appointment) return;
+  const site = data.sites.find(item => item.id === appointment.siteId);
+  modal(appointment.title || 'Intervention', `<div class="detail-card"><p><b>Chantier</b><br>${esc(site?.name || appointment.site || 'À préciser')}</p><p><b>Date et heure</b><br>${esc(appointment.date || 'Date à préciser')} · ${esc(appointment.time || 'Heure à préciser')}</p><p><b>Durée</b><br>${Number(appointment.duration || 60)} minutes</p><p><b>Intervenant</b><br>${esc(appointment.assignee || 'À préciser')}</p>${appointment.note ? `<p><b>Note</b><br>${esc(appointment.note)}</p>` : ''}<div class="form-actions"><button type="button" class="btn danger" data-record-menu="${esc(id)}">Supprimer l’intervention</button></div></div>`);
+}
+
+function planningPage() {
+  const today = todayISO();
+  const validViews = ['day', 'week', 'month'];
+  if (!validViews.includes(planningView)) planningView = 'week';
+  let anchor = new Date(`${planningAnchor}T12:00:00`);
+  if (Number.isNaN(anchor.getTime())) { planningAnchor = today; anchor = new Date(`${today}T12:00:00`); }
+  const iso = date => planningISO(date);
+  const fullDate = value => new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
+  const start = new Date(anchor);
+  const dates = [];
+  if (planningView === 'day') dates.push(new Date(anchor));
+  else if (planningView === 'week') {
+    const weekday = start.getDay() || 7;
+    start.setDate(start.getDate() - weekday + 1);
+    for (let index = 0; index < 7; index++) { const date = new Date(start); date.setDate(start.getDate() + index); dates.push(date); }
+  } else {
+    start.setDate(1);
+    const weekday = start.getDay() || 7;
+    start.setDate(start.getDate() - weekday + 1);
+    for (let index = 0; index < 42; index++) { const date = new Date(start); date.setDate(start.getDate() + index); dates.push(date); }
+  }
+  const all = (data.appointments || []).filter(item => !item.archivedAt).sort((a, b) => `${a.date || ''} ${a.time || ''}`.localeCompare(`${b.date || ''} ${b.time || ''}`));
+  const assignees = [...new Set(all.map(item => String(item.assignee || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const filtered = all.filter(item => (!planningSiteFilter || item.siteId === planningSiteFilter || item.site === planningSiteFilter) && (!planningAssigneeFilter || item.assignee === planningAssigneeFilter));
+  const shownDates = new Set(dates.map(iso));
+  const periodEvents = filtered.filter(item => shownDates.has(item.date));
+  const periodLabel = planningView === 'day'
+    ? fullDate(iso(anchor))
+    : planningView === 'week'
+      ? `Semaine du ${new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(dates[0])} au ${new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }).format(dates[6])}`
+      : new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(anchor);
+  const days = dates.map(date => {
+    const dateISO = iso(date);
+    const dayEvents = filtered.filter(item => item.date === dateISO);
+    const outside = planningView === 'month' && date.getMonth() !== anchor.getMonth();
+    const weekdayLabel = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: planningView === 'month' ? undefined : 'short' }).format(date);
+    const visibleEvents = dayEvents.slice(0, planningView === 'day' ? 50 : planningView === 'month' ? 2 : 4);
+    const eventRows = visibleEvents.map(item => `<button type="button" class="planning-event" data-appointment-open="${esc(item.id)}" aria-label="Ouvrir ${esc(item.title || 'l’intervention')}"><b>${esc(item.time || 'Heure à préciser')} · ${esc(item.title || 'Intervention')}</b><small>${esc(siteLabel(item))}${item.assignee ? ` · ${esc(item.assignee)}` : ''}</small></button>`).join('');
+    const remaining = dayEvents.length - visibleEvents.length;
+    return `<article class="planning-day${dateISO === today ? ' is-today' : ''}${outside ? ' is-outside-month' : ''}"><button type="button" class="planning-day-head" data-calendar-date="${dateISO}" aria-label="Afficher le ${esc(fullDate(dateISO))}"><span>${esc(weekdayLabel)}</span><b>${date.getDate()}</b></button><div class="planning-day-items">${eventRows || '<span class="planning-empty">Aucune intervention</span>'}${remaining > 0 ? `<span class="planning-more">+${remaining} autre(s)</span>` : ''}</div></article>`;
+  }).join('');
+  const weekdayHeader = planningView === 'day' ? '' : `<div class="planning-weekdays" aria-hidden="true">${['Lun.','Mar.','Mer.','Jeu.','Ven.','Sam.','Dim.'].map(day => `<span>${day}</span>`).join('')}</div>`;
+  const selectedSites = (data.sites || []).map(site => `<option value="${esc(site.id)}" ${site.id === planningSiteFilter ? 'selected' : ''}>${esc(site.name)}</option>`).join('');
+  const selectedAssignees = assignees.map(name => `<option value="${esc(name)}" ${name === planningAssigneeFilter ? 'selected' : ''}>${esc(name)}</option>`).join('');
+  const views = [['day','Jour'],['week','Semaine'],['month','Mois']].map(([value, label]) => `<button type="button" class="btn secondary planning-view-button${planningView === value ? ' active' : ''}" data-planning-view="${value}" aria-pressed="${planningView === value}">${label}</button>`).join('');
+  const noSites = !data.sites.length ? '<div class="notice"><span class="notice-icon">ⓘ</span><span>Créez d’abord un chantier pour pouvoir y rattacher une intervention. <a href="#chantiers" data-page="chantiers">Créer un chantier</a></span></div>' : '';
+  return `${heading('ORGANISATION', 'Planning des interventions', 'Planifiez et retrouvez les rendez-vous par jour, semaine ou mois.', '<button class="btn primary" data-module-action="appointment">＋ Planifier une intervention</button>')}${localNotice}${noSites}<section class="panel planning-panel"><div class="planning-toolbar"><div class="planning-nav"><button type="button" class="btn secondary" data-planning-shift="-1" aria-label="Période précédente">←</button><button type="button" class="btn secondary" data-planning-today>Aujourd’hui</button><button type="button" class="btn secondary" data-planning-shift="1" aria-label="Période suivante">→</button><strong>${esc(periodLabel)}</strong></div><div class="planning-view-switch" role="group" aria-label="Affichage du planning">${views}</div></div><div class="planning-filters"><label>Date de référence<input id="planning-anchor" type="date" value="${iso(anchor)}"></label><label>Chantier<select id="planning-site-filter"><option value="">Tous les chantiers</option>${selectedSites}</select></label><label>Intervenant<select id="planning-assignee-filter"><option value="">Tous les intervenants</option>${selectedAssignees}</select></label><div class="planning-count">${periodEvents.length} intervention(s) sur la période</div></div>${weekdayHeader}<div class="planning-calendar planning-${planningView}${planningView === 'month' ? ' planning-month' : ''}">${days}</div><p class="form-hint planning-note">Les interventions sont enregistrées sur cet appareil. Touchez une intervention pour consulter ses détails ; utilisez son bouton de suppression dans la fiche pour la retirer.</p></section>`;
+}
+
 function assistantPage() {
   const today = todayISO();
   const insights = [];
@@ -510,6 +572,22 @@ function openInvoicePrint(id) {
   </div><p class="form-hint print-help">Sur iPhone, utilisez Imprimer puis ouvrez le partage de l’aperçu pour enregistrer dans Fichiers ou l’envoyer. Pour un envoi par e-mail, joignez le PDF enregistré.</p><div class="form-actions print-controls"><button class="btn secondary" data-invoice-action="back" data-id="${esc(id)}">Retour</button><button class="btn primary" data-invoice-action="print-now">Imprimer / enregistrer en PDF</button></div>`);
 }
 
+
+function purchasesPage() {
+  const purchases = (data.purchases || []).filter(item => !item.archivedAt).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  const pending = purchases.filter(item => item.status === 'À valider').length;
+  const ordered = purchases.filter(item => ['Commandée', 'Partiellement reçue'].includes(item.status)).length;
+  const completed = purchases.filter(item => item.status === 'Réceptionnée').length;
+  const committedHT = purchases.filter(item => item.status !== 'Annulée').reduce((sum, item) => sum + Number(item.amountHT || 0), 0);
+  const orderRows = purchases.map(item => {
+    const delivery = item.delivery ? ` · livraison prévue ${esc(item.delivery)}` : '';
+    const tone = item.status === 'Réceptionnée' ? 'green-pill' : item.status === 'À valider' ? 'amber-pill' : item.status === 'Annulée' ? 'gray-pill' : 'blue-pill';
+    const status = `<span class="pill ${tone}">${esc(item.status || 'À vérifier')}</span>`;
+    return moduleRow('▧', item.reference || 'Commande', `${esc(item.supplier || 'Fournisseur à préciser')} · ${esc(siteLabel(item))}${delivery}`, status, item.id);
+  });
+  const suppliers = (data.suppliers || []).map(item => `<div class="quote-line"><span class="doc-icon">${iconSvg('▱')}</span><span class="quote-name"><b>${esc(item.name)}</b><small>${esc(item.email || item.phone || item.terms || 'Coordonnées à compléter')}</small></span></div>`).join('');
+  return `${heading('ACHATS & MATÉRIEL', 'Commandes et stock', 'Suivez les commandes fournisseurs, les réceptions et les quantités enregistrées.', '<button class="btn primary" data-module-action="purchase">＋ Nouvelle commande</button> <button class="btn secondary" data-module-action="supplier">＋ Fournisseur</button>')}${localNotice}<div class="metric-grid compact-metrics"><article class="metric-card"><div class="metric-label">Commandes à valider</div><strong>${pending}</strong><div class="metric-note">À confirmer manuellement</div></article><article class="metric-card"><div class="metric-label">En cours de réception</div><strong>${ordered}</strong><div class="metric-note">Commandées ou partiellement reçues</div></article><article class="metric-card"><div class="metric-label">Réceptionnées</div><strong>${completed}</strong><div class="metric-note">Réceptions enregistrées</div></article><article class="metric-card"><div class="metric-label">Engagement HT indicatif</div><strong>${money(committedHT)}</strong><div class="metric-note">Commandes non annulées, pas des dépenses payées</div></article></div><section class="panel"><div class="panel-head"><div><h2>Commandes fournisseurs</h2><p>${purchases.length} commande(s) enregistrée(s) sur cet appareil</p></div></div>${moduleList(orderRows, 'Aucune commande. Ajoutez un fournisseur puis créez votre première commande.')}</section><section class="panel"><div class="panel-head"><div><h2>Fournisseurs</h2><p>${(data.suppliers || []).length} fiche(s)</p></div><button class="btn secondary" data-module-action="supplier">＋ Ajouter un fournisseur</button></div>${suppliers ? `<div class="quote-preview">${suppliers}</div>` : '<div class="empty-state">Aucun fournisseur enregistré.</div>'}</section>${typeof stockSection === 'function' ? stockSection() : '<section class="panel"><h2>Stock et matériel</h2><p class="form-hint">La gestion du stock est indisponible dans cette version.</p></section>'}`;
+}
 
 function financesPage() {
   const paidFor = id => data.payments.filter(p => p.invoiceId === id).reduce((sum, p) => sum + Number(p.amount || 0), 0);
@@ -1088,7 +1166,7 @@ document.addEventListener('click', event => {
   }
   if (event.target.closest('[data-planning-today]')) { planningAnchor = todayISO(); render(); return; }
   const calendarDay = event.target.closest('[data-calendar-date]');
-  if (calendarDay && planningView === 'month') { planningAnchor = calendarDay.dataset.calendarDate; planningView = 'day'; render(); }
+  if (calendarDay && ['month', 'week'].includes(planningView)) { planningAnchor = calendarDay.dataset.calendarDate; planningView = 'day'; render(); }
 });
 
 document.addEventListener('change', async event => {
