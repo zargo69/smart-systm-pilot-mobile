@@ -132,7 +132,9 @@ async function searchFreeAddress(input) {
   const button = input.parentElement.querySelector('[data-address-search]');
   let cache = {}; try { cache = JSON.parse(localStorage.getItem('ssp-address-search-cache-v1') || '{}'); } catch { cache = {}; }
   const endpoint = String(data.settings.addressSearchEndpoint || 'https://nominatim.openstreetmap.org/search').trim();
-  const cacheKey = `${endpoint}:${data.settings.country}:${query.toLocaleLowerCase('fr').replace(/\s+/g, ' ')}`;
+  const countryCode = String(data.settings.country || 'FR').toLowerCase().match(/^[a-z]{2}$/)?.[0] || 'fr';
+  const normalizedQuery = query.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const cacheKey = `${endpoint}:${countryCode}:${normalizedQuery}`;
   const cached = Array.isArray(cache[cacheKey]) ? cache[cacheKey] : null;
   const now = Date.now();
   if (!cached && now - lastAddressLookupAt < 1100) return notify('Patientez un instant avant une nouvelle recherche d’adresse.');
@@ -141,29 +143,34 @@ async function searchFreeAddress(input) {
   try {
     let matches = cached;
     if (!matches) {
-      const country = data.settings.country === 'CH' ? 'ch' : 'fr';
       const url = new URL(endpoint);
-      url.search = new URLSearchParams({ format: 'jsonv2', addressdetails: '1', limit: '5', countrycodes: country, q: query });
+      url.search = new URLSearchParams({ format: 'jsonv2', addressdetails: '1', limit: '5', countrycodes: countryCode, 'accept-language': 'fr', q: query });
       const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 12000);
       let response; try { response = await fetch(url, { headers: { 'Accept-Language': 'fr' }, signal: controller.signal }); } finally { clearTimeout(timeout); }
-      if (!response.ok) throw new Error(response.status === 429 ? 'Limite du service public atteinte. Réessayez plus tard.' : 'Le service d’adresses est temporairement indisponible.');
+      if (response.status === 429) throw new Error('Le service gratuit reçoit trop de demandes en ce moment. Attendez quelques secondes puis réessayez.');
+      if (response.status === 403) throw new Error('Le service d’adresses refuse temporairement la requête. Réessayez plus tard ou saisissez l’adresse manuellement.');
+      if (!response.ok) throw new Error('Le service d’adresses est temporairement indisponible. Vous pouvez saisir l’adresse manuellement.');
       matches = await response.json();
+      if (!Array.isArray(matches)) throw new Error('Réponse inattendue du service d’adresses. Réessayez ou saisissez l’adresse manuellement.');
       if (Array.isArray(matches) && matches.length) {
         cache[cacheKey] = matches.slice(0, 5);
         const entries = Object.entries(cache); if (entries.length > 50) cache = Object.fromEntries(entries.slice(-50));
         try { localStorage.setItem('ssp-address-search-cache-v1', JSON.stringify(cache)); } catch { /* La recherche reste utilisable si le cache est plein. */ }
       }
     }
-    if (!Array.isArray(matches) || !matches.length) { results.textContent = 'Aucun résultat. Essayez avec le code postal ou la ville.'; return; }
+    if (input.value.trim() !== query) return;
+    matches = (Array.isArray(matches) ? matches : []).filter(place => Number.isFinite(Number(place.lat)) && Number.isFinite(Number(place.lon)) && Math.abs(Number(place.lat)) <= 90 && Math.abs(Number(place.lon)) <= 180);
+    if (!matches.length) { results.textContent = 'Aucun résultat fiable. Ajoutez le code postal et la ville, ou saisissez l’adresse manuellement.'; return; }
     for (const place of matches) {
       const option = document.createElement('button'); option.type = 'button'; option.className = 'address-search-option'; option.textContent = place.display_name || 'Adresse trouvée';
       option.addEventListener('click', () => {
         input.value = place.display_name || query;
+        input.dataset.addressChosen = input.value;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         let lat = form.elements.namedItem('latitude'); let lon = form.elements.namedItem('longitude');
         if (!lat) { lat = document.createElement('input'); lat.type = 'hidden'; lat.name = 'latitude'; form.append(lat); }
         if (!lon) { lon = document.createElement('input'); lon.type = 'hidden'; lon.name = 'longitude'; form.append(lon); }
-        lat.value = String(place.lat || ''); lon.value = String(place.lon || '');
+        lat.value = String(place.lat ?? ''); lon.value = String(place.lon ?? '');
         const addr = place.address || {};
         const city = addr.city || addr.town || addr.village || addr.municipality || addr.suburb;
         if (city && form.elements.namedItem('city')) form.elements.namedItem('city').value = city;
@@ -173,7 +180,7 @@ async function searchFreeAddress(input) {
       results.append(option);
     }
   } catch (error) {
-    results.textContent = error.name === 'TimeoutError' ? 'La recherche a pris trop de temps. Réessayez.' : error.message || 'Impossible de rechercher cette adresse.';
+    results.textContent = error.name === 'AbortError' || error.name === 'TimeoutError' ? 'La recherche a dépassé 12 secondes. Vérifiez votre connexion ou saisissez l’adresse manuellement.' : error.message || 'Recherche impossible. Vérifiez votre connexion ou saisissez l’adresse manuellement.';
   } finally { button.disabled = false; button.textContent = 'Rechercher l’adresse'; }
 }
 
@@ -184,6 +191,17 @@ function mountFreeAddressSearch(input) {
   const host = document.createElement('div'); host.className = 'address-search-controls';
   const button = document.createElement('button'); button.type = 'button'; button.className = 'btn secondary'; button.dataset.addressSearch = 'true'; button.textContent = 'Rechercher l’adresse';
   button.addEventListener('click', () => searchFreeAddress(input));
+  input.addEventListener('input', () => {
+    if (input.dataset.addressChosen === input.value) return;
+    delete input.dataset.addressChosen;
+    const form = input.form;
+    for (const name of ['latitude', 'longitude']) {
+      const coordinate = form?.elements.namedItem(name);
+      if (coordinate) coordinate.value = '';
+    }
+    const resultBox = input.parentElement.querySelector('.address-search-results');
+    if (resultBox) resultBox.replaceChildren();
+  });
   const results = document.createElement('div'); results.className = 'address-search-results'; results.setAttribute('aria-live', 'polite');
   host.append(button, results); input.after(host);
   const hint = document.createElement('small'); hint.className = 'form-hint'; hint.innerHTML = 'Recherche lancée uniquement après votre clic ; pas d’autocomplétion. Service gratuit limité à un usage raisonnable. <a href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noopener noreferrer">Conditions et limites du service</a>.';
@@ -1341,14 +1359,44 @@ document.addEventListener('input', event => {
 });
 
 document.addEventListener('click', event => {
+  const deleteSiteButton = event.target.closest('[data-site-delete-action]');
+  if (deleteSiteButton) {
+    const site = data.sites.find(item => item.id === deleteSiteButton.dataset.id);
+    if (!site) return notify('Ce chantier n’existe plus.');
+    const collections = ['appointments', 'purchases', 'quotes', 'invoices', 'expenses', 'documents', 'reports', 'tasks', 'timeEntries', 'stockMovements', 'siteTasks', 'siteTimeEntries', 'siteMilestones', 'siteReservations', 'siteChecklists'];
+    const relatedCount = collections.reduce((total, key) => total + (data[key] || []).filter(record => SSPDomain.recordBelongsToSite(record, site, data.sites)).length, 0);
+    if (!confirm(`Supprimer définitivement le chantier « ${site.name} » ?\n\n${relatedCount} élément(s) lié(s) seront conservés, mais détachés du chantier avec son nom comme repère. Cette action est irréversible.`)) return;
+    const previousSites = data.sites;
+    const previousCollections = Object.fromEntries(collections.map(key => [key, data[key]]));
+    for (const key of collections) {
+      data[key] = (data[key] || []).map(record => {
+        if (!SSPDomain.recordBelongsToSite(record, site, previousSites)) return record;
+        const detached = { ...record, site: record.site || site.name };
+        delete detached.siteId;
+        return detached;
+      });
+    }
+    data.sites = previousSites.filter(item => item.id !== site.id);
+    if (!save()) {
+      data.sites = previousSites;
+      for (const key of collections) data[key] = previousCollections[key];
+      return;
+    }
+    closeModal(); render(); notify('Chantier supprimé. Les éléments liés sont conservés et l’action apparaît dans l’historique.'); return;
+  }
   const clientAction = event.target.closest('[data-client-action]');
   if (clientAction) {
     const client = data.clients.find(item => item.id === clientAction.dataset.id); if (!client) return;
     if (clientAction.dataset.clientAction === 'edit') return openClientEdit(client.id);
     if (clientAction.dataset.clientAction === 'delete') {
-      const referenced = data.sites.some(item => item.client === client.name) || data.quotes.some(item => item.client === client.name) || data.invoices.some(item => item.client === client.name) || (data.prospects || []).some(item => item.clientId === client.id || item.id === client.sourceProspectId) || (data.followups || []).some(item => item.entityType === 'client' && item.entityId === client.id);
-      if (referenced) return notify('Ce client est lié à un chantier, un devis, une facture ou un prospect. Supprimez ou rattachez ces éléments avant de supprimer sa fiche.');
-      if (!confirm(`Supprimer définitivement la fiche client « ${client.name} » ?`)) return;
+      const linked = [
+        ['chantier(s)', data.sites.filter(item => item.client === client.name).length],
+        ['devis', data.quotes.filter(item => item.client === client.name).length],
+        ['facture(s)', data.invoices.filter(item => item.client === client.name).length],
+        ['relance(s)', (data.followups || []).filter(item => item.entityType === 'client' && item.entityId === client.id).length]
+      ].filter(([, count]) => count > 0).map(([label, count]) => `${count} ${label}`);
+      const warning = linked.length ? '\n\nLes éléments liés (' + linked.join(', ') + ') seront conservés avec leur texte actuel, mais ne seront plus rattachés à une fiche client.' : '';
+      if (!confirm(`Supprimer définitivement la fiche client « ${client.name} » ?${warning}\n\nCette action est irréversible.`)) return;
       const previous = data.clients; data.clients = previous.filter(item => item.id !== client.id); if (!save()) { data.clients = previous; return; }
       closeModal(); render(); notify('Fiche client supprimée et action inscrite dans l’historique.'); return;
     }
