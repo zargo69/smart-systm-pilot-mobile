@@ -180,7 +180,7 @@ async function searchFreeAddress(input) {
       results.append(option);
     }
   } catch (error) {
-    results.textContent = error.name === 'AbortError' || error.name === 'TimeoutError' ? 'La recherche a dépassé 12 secondes. Vérifiez votre connexion ou saisissez l’adresse manuellement.' : error.message || 'Recherche impossible. Vérifiez votre connexion ou saisissez l’adresse manuellement.';
+    results.textContent = error.name === 'AbortError' || error.name === 'TimeoutError' ? 'La recherche a dépassé 12 secondes. Vérifiez votre connexion ou saisissez l’adresse manuellement.' : error.name === 'TypeError' ? 'Recherche impossible : vérifiez votre connexion Internet. Vous pouvez saisir l’adresse manuellement.' : error.message || 'Recherche impossible. Vérifiez votre connexion ou saisissez l’adresse manuellement.';
   } finally { button.disabled = false; button.textContent = 'Rechercher l’adresse'; }
 }
 
@@ -1393,6 +1393,7 @@ document.addEventListener('click', event => {
         ['chantier(s)', data.sites.filter(item => item.client === client.name).length],
         ['devis', data.quotes.filter(item => item.client === client.name).length],
         ['facture(s)', data.invoices.filter(item => item.client === client.name).length],
+        ['prospect(s)', (data.prospects || []).filter(item => item.clientId === client.id || item.id === client.sourceProspectId).length],
         ['relance(s)', (data.followups || []).filter(item => item.entityType === 'client' && item.entityId === client.id).length]
       ].filter(([, count]) => count > 0).map(([label, count]) => `${count} ${label}`);
       const warning = linked.length ? '\n\nLes éléments liés (' + linked.join(', ') + ') seront conservés avec leur texte actuel, mais ne seront plus rattachés à une fiche client.' : '';
