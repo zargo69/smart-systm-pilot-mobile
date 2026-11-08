@@ -229,6 +229,7 @@ function showSite(id) {
     <div class="op-section-head"><h3>Activité liée</h3></div>
     <p class="form-hint">${appointments.length} intervention(s) · ${docs.length - photos.length} document(s) · ${photos.length} photo(s) · ${reports.length} compte rendu(s). Les fiches complètes sont disponibles dans les rubriques Planning, Documents et Rapports.</p>
     <button class="btn secondary full-btn" data-action="edit-site">Modifier le chantier</button>
+    <button class="btn danger full-btn" data-site-delete-action="true" data-id="${esc(site.id)}">Supprimer le chantier</button>
   </div>`);
   $('#modal-content').querySelector('[data-action="edit-site"]').onclick = () => { closeModal(); openEditSite(id); };
 }
