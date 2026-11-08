@@ -394,6 +394,11 @@ function planningPage() {
   return `${heading('ORGANISATION', 'Planning des interventions', 'Planifiez et retrouvez les rendez-vous par jour, semaine ou mois.', '<button class="btn primary" data-module-action="appointment">＋ Planifier une intervention</button>')}${localNotice}${noSites}<section class="panel planning-panel"><div class="planning-toolbar"><div class="planning-nav"><button type="button" class="btn secondary" data-planning-shift="-1" aria-label="Période précédente">←</button><button type="button" class="btn secondary" data-planning-today>Aujourd’hui</button><button type="button" class="btn secondary" data-planning-shift="1" aria-label="Période suivante">→</button><strong>${esc(periodLabel)}</strong></div><div class="planning-view-switch" role="group" aria-label="Affichage du planning">${views}</div></div><div class="planning-filters"><label>Date de référence<input id="planning-anchor" type="date" value="${iso(anchor)}"></label><label>Chantier<select id="planning-site-filter"><option value="">Tous les chantiers</option>${selectedSites}</select></label><label>Intervenant<select id="planning-assignee-filter"><option value="">Tous les intervenants</option>${selectedAssignees}</select></label><div class="planning-count">${periodEvents.length} intervention(s) sur la période</div></div>${weekdayHeader}<div class="planning-calendar planning-${planningView}${planningView === 'month' ? ' planning-month' : ''}">${days}</div><p class="form-hint planning-note">Les interventions sont enregistrées sur cet appareil. Touchez une intervention pour consulter ses détails ; utilisez son bouton de suppression dans la fiche pour la retirer.</p></section>`;
 }
 
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-appointment-open]');
+  if (button) showAppointmentDetails(button.dataset.appointmentOpen);
+});
+
 function assistantPage() {
   const today = todayISO();
   const insights = [];
