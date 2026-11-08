@@ -577,11 +577,11 @@ function purchasesPage() {
   const purchases = (data.purchases || []).filter(item => !item.archivedAt).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
   const pending = purchases.filter(item => item.status === 'À valider').length;
   const ordered = purchases.filter(item => ['Commandée', 'Partiellement reçue'].includes(item.status)).length;
-  const completed = purchases.filter(item => item.status === 'Réceptionnée').length;
+  const completed = purchases.filter(item => item.status === 'Reçue').length;
   const committedHT = purchases.filter(item => item.status !== 'Annulée').reduce((sum, item) => sum + Number(item.amountHT || 0), 0);
   const orderRows = purchases.map(item => {
     const delivery = item.delivery ? ` · livraison prévue ${esc(item.delivery)}` : '';
-    const tone = item.status === 'Réceptionnée' ? 'green-pill' : item.status === 'À valider' ? 'amber-pill' : item.status === 'Annulée' ? 'gray-pill' : 'blue-pill';
+    const tone = item.status === 'Reçue' ? 'green-pill' : item.status === 'À valider' ? 'amber-pill' : item.status === 'Annulée' ? 'gray-pill' : 'blue-pill';
     const status = `<span class="pill ${tone}">${esc(item.status || 'À vérifier')}</span>`;
     return moduleRow('▧', item.reference || 'Commande', `${esc(item.supplier || 'Fournisseur à préciser')} · ${esc(siteLabel(item))}${delivery}`, status, item.id);
   });
