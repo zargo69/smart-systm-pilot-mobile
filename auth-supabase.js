@@ -124,11 +124,89 @@
     }
   }
 
-  async function openApp(user) {
-    if (!user) {
-      renderGate('Aucun utilisateur authentifié.');
-      return;
-    }
+  
+async function loadOrCreateCompany(user) {
+  // Vérifier si l'utilisateur possède déjà une entreprise
+  const { data: membership, error: membershipError } =
+    await supabaseClient
+      .from('ssp_company_members')
+      .select('company_id, role')
+      .eq('user_id', user.id)
+      .limit(1)
+      .maybeSingle();
+
+  if (membershipError) throw membershipError;
+
+  // Si aucune entreprise n'existe, créer SMART SYST'M
+  if (!membership) {
+    const { data: companyId, error: createError } =
+      await supabaseClient.rpc('ssp_create_company', {
+        p_name: 'SMART SYST’M'
+      });
+
+    if (createError) throw createError;
+    if (!companyId) throw new Error('Création de l’entreprise impossible.');
+
+    return {
+      companyId,
+      role: 'admin'
+    };
+  }
+
+  return {
+    companyId: membership.company_id,
+    role: membership.role
+  };
+}
+
+  
+async function openApp(user) {
+  if (!user) {
+    renderGate('Aucun utilisateur authentifié.');
+    return;
+  }
+
+  try {
+    const company = await loadOrCreateCompany(user);
+
+    const displayName =
+      user.user_metadata?.display_name ||
+      user.user_metadata?.full_name ||
+      user.email?.split('@')[0] ||
+      'Utilisateur';
+
+    currentAccount = {
+      id: user.id,
+      email: user.email || '',
+      username: user.email || '',
+      displayName,
+      role: company.role,
+      companyId: company.companyId,
+      active: true,
+      authProvider: 'supabase'
+    };
+
+    screen.hidden = true;
+    document.querySelector('.app-shell').hidden = false;
+    document.querySelector('.mobile-nav').hidden = false;
+
+    updateProfile();
+    scheduleIdleCheck();
+    route(page || 'accueil');
+
+  } catch (error) {
+    console.error('[SSP] Erreur de rattachement entreprise :', error);
+    currentAccount = null;
+
+    document.querySelector('.app-shell').hidden = true;
+    document.querySelector('.mobile-nav').hidden = true;
+
+    renderGate(
+      'Impossible de récupérer votre entreprise. Vérifiez la connexion et réessayez.'
+    );
+  }
+}
+
 
     const displayName =
       user.user_metadata?.display_name ||
