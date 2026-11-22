@@ -1,0 +1,24 @@
+
+name: Test preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/supabase-integration
+
+jobs:
+  preview-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout development branch
+        uses: actions/checkout@v4
+
+      - name: Verify application files
+        run: |
+          test -f index.html
+          test -f auth-supabase.js
+          test -f supabase-client.js
+          test -f supabase-config.js
+          echo "SMART SYST'M preview files verified."
