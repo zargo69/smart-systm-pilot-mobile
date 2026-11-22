@@ -208,31 +208,7 @@ async function openApp(user) {
 }
 
 
-    const displayName =
-      user.user_metadata?.display_name ||
-      user.user_metadata?.full_name ||
-      user.email?.split('@')[0] ||
-      'Utilisateur';
 
-    currentAccount = {
-      id: user.id,
-      email: user.email || '',
-      username: user.email || '',
-      displayName,
-      role: 'admin',
-      active: true,
-      authProvider: 'supabase'
-    };
-
-    screen.hidden = true;
-
-    document.querySelector('.app-shell').hidden = false;
-    document.querySelector('.mobile-nav').hidden = false;
-
-    updateProfile();
-    scheduleIdleCheck();
-    route(page || 'accueil');
-  }
 
   function updateProfile() {
     if (!currentAccount) return;
