@@ -131,16 +131,25 @@
 
   
 async function loadOrCreateCompany(user) {
-  // Vérifier si l'utilisateur possède déjà une entreprise
-  const { data: membership, error: membershipError } =
-    await supabaseClient
+  const cacheKey = 'ssp-company-session-v1:' + user.id;
+  let membership;
+  try {
+    const result = await supabaseClient
       .from('ssp_company_members')
       .select('company_id, role')
       .eq('user_id', user.id)
       .limit(1)
       .maybeSingle();
-
-  if (membershipError) throw membershipError;
+    if (result.error) throw result.error;
+    membership = result.data;
+  } catch (error) {
+    // Uniquement un repli hors ligne, lié à l'identifiant du compte authentifié.
+    if (navigator.onLine) throw error;
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(cacheKey) || 'null'); } catch {}
+    if (!cached?.companyId || !cached?.role) throw new Error('Aucun espace entreprise déjà vérifié pour ce compte hors ligne.');
+    return { companyId: cached.companyId, role: cached.role };
+  }
 
   // Si aucune entreprise n'existe, créer SMART SYST'M
   if (!membership) {
@@ -152,16 +161,14 @@ async function loadOrCreateCompany(user) {
     if (createError) throw createError;
     if (!companyId) throw new Error('Création de l’entreprise impossible.');
 
-    return {
-      companyId,
-      role: 'admin'
-    };
+    const resolved = { companyId, role: 'admin' };
+    localStorage.setItem(cacheKey, JSON.stringify(resolved));
+    return resolved;
   }
 
-  return {
-    companyId: membership.company_id,
-    role: membership.role
-  };
+  const resolved = { companyId: membership.company_id, role: membership.role };
+  localStorage.setItem(cacheKey, JSON.stringify(resolved));
+  return resolved;
 }
 
   
@@ -174,7 +181,7 @@ async function openApp(user) {
   try {
     const company = await loadOrCreateCompany(user);
     window.SSPCompanyStorage?.activate(company.companyId);
-    if (window.SSP_SUPABASE_CONFIG?.syncEnabled === true) {
+    if (window.SSP_SUPABASE_CONFIG?.syncEnabled === true && navigator.onLine) {
       await window.SSPSync.initialize(company.companyId);
     }
 
@@ -386,6 +393,15 @@ async function openApp(user) {
   for (const eventName of ['pointerdown', 'keydown', 'click', 'input', 'touchstart']) {
     document.addEventListener(eventName, recordActivity, { passive: true });
   }
+
+  window.addEventListener('online', () => {
+    if (currentAccount && window.SSP_SUPABASE_CONFIG?.syncEnabled === true && !window.SSPSync?.isReady()) {
+      window.SSPSync?.initialize(currentAccount.companyId)
+        .catch(error => console.error('[SSP] Reprise de synchronisation impossible :', error));
+    } else if (currentAccount && window.SSPSync?.isReady()) {
+      window.SSPSync.flush().catch(() => {});
+    }
+  });
 
   supabaseClient.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') {
