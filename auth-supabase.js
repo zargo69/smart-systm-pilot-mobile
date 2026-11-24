@@ -173,6 +173,7 @@ async function openApp(user) {
 
   try {
     const company = await loadOrCreateCompany(user);
+    window.SSPCompanyStorage?.activate(company.companyId);
     if (window.SSP_SUPABASE_CONFIG?.syncEnabled === true) {
       await window.SSPSync.initialize(company.companyId);
     }
