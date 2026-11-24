@@ -57,3 +57,8 @@ Le 8 novembre 2026, les cinq scripts JavaScript principaux ont passé un contrô
 
 Pour les étapes détaillées, consultez le [guide utilisateur](guide-utilisateur.md) et le [guide carte et adresses](carte-gratuite.md).
 
+
+
+### Préparation des données métier
+
+La branche `feature/supabase-integration` contient une migration SQL, un adaptateur de synchronisation versionnée et des tests de régression. La synchronisation distante reste désactivée tant que la migration et les essais de sécurité multi-entreprises ne sont pas validés. Ne pas utiliser cette branche pour des dossiers clients réels avant la validation documentée dans `SUPABASE_SYNC_SETUP.md`.
