@@ -114,6 +114,7 @@
       throw new Error('Les données distantes ont été chargées en mémoire mais leur copie locale a échoué. La synchronisation reste désactivée.');
     }
     lastSnapshot = JSON.stringify(rowsFromData(data));
+    writeState();
     ready = true;
     schedule();
     console.info('[SSPSync] Initialisation terminée', { distant: remote.length, local: local.length });
