@@ -5,6 +5,7 @@
 - `auth-supabase.js` gère la connexion et la récupération du mot de passe.
 - `company-storage.js` sépare les données locales par entreprise.
 - `supabase-sync.js` contient l'adaptateur de synchronisation versionnée.
+- Pour contrôler la configuration distante sans navigateur, suivre [le diagnostic CLI en lecture seule](SUPABASE_CLI_DIAGNOSTICS.md).
 
 ## Protection des comptes et données
 Ne jamais ajouter une clé `sb_secret_*` ou `service_role` au dépôt ou au navigateur. Les tables doivent être protégées par RLS. Les données métier ne doivent pas être utilisées en production tant que la migration SQL, les tests RLS multi-entreprises, la reprise hors ligne et le stockage des pièces jointes ne sont pas validés.
@@ -14,7 +15,7 @@ Le stockage local historique `ssp-data` est conservé. Lors de la première conn
 Le rattachement entreprise déjà vérifié est mis en cache par identifiant utilisateur afin de permettre l'ouverture de l'espace local hors ligne après une première connexion en ligne. Ce cache n'accorde aucun accès serveur et ne remplace pas l'authentification.
 
 ## Mise en service de la base
-Exécuter `supabase-migrations/001_business_records.sql` dans le SQL Editor Supabase. Vérifier la table, les fonctions et les policies. La synchronisation distante reste désactivée par défaut (`syncEnabled: false)) tant que les essais multi-comptes et de conflits ne sont pas validés.
+Exécuter `supabase-migrations/001_business_records.sql` dans le SQL Editor Supabase. Vérifier la table, les fonctions et les policies. La synchronisation distante reste désactivée par défaut (`syncEnabled: false`) tant que les essais multi-comptes et de conflits ne sont pas validés.
 
 ## Limites connues
 - Le stockage des fichiers clients dans un bucket privé et les URL signées restent à implémenter.
