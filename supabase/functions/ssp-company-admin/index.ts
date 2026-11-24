@@ -64,6 +64,15 @@ Deno.serve(async (request) => {
 
   if (body.action === 'invite') {
     const email = String(body.email || '').trim().toLowerCase();
+    const configuredRedirect = Deno.env.get('SSP_INVITE_REDIRECT_URL');
+    if (!configuredRedirect) return json({ error: 'URL de retour des invitations non configurée.' }, 500);
+    let inviteRedirect: string;
+    try {
+      const target = new URL(configuredRedirect);
+      if (target.protocol !== 'https:') throw new Error('https');
+      target.searchParams.set('invite', '1');
+      inviteRedirect = target.toString();
+    } catch { return json({ error: 'URL de retour des invitations invalide.' }, 500); }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
       return json({ error: 'Adresse e-mail invalide.' }, 400);
     }
@@ -77,7 +86,7 @@ Deno.serve(async (request) => {
     let user = existingUser;
     let invitationSent = false;
     if (!user) {
-      const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email);
+      const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo: inviteRedirect });
       if (inviteError || !invited.user) return json({ error: 'Invitation impossible. Vérifiez la configuration des e-mails.' }, 400);
       user = invited.user;
       invitationSent = true;
