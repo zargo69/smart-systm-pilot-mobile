@@ -10,10 +10,10 @@ La synchronisation reste désactivée dans supabase-config.js (syncEnabled: fals
 2. Appliquer les migrations 001_business_records.sql, 002_private_company_files.sql puis 003_company_admin_access.sql dans cet ordre.
 3. Configurer dans Supabase l’URL de retour des invitations et l’autoriser dans les redirections Auth, puis déployer la fonction Edge supabase/functions/ssp-company-admin/index.ts. La clé de service reste dans les secrets Supabase; ne jamais la copier dans le navigateur ou le dépôt.
 4. Vérifier avec deux comptes de la même entreprise que les dossiers sont visibles et modifiables par les deux, que seul le responsable peut modifier les réglages, inviter ou retirer un membre.
-5. Vérifier qu’un membre d’une autre entreprise ne peut ni lire ni modifier les dossiers.
+5. Vérifier qu’un compte non invité ne peut ni lire ni modifier les dossiers.
 6. Après ces vérifications, activer syncEnabled dans supabase-config.js et publier la version validée.
 
-La première synchronisation du responsable importe ses dossiers présents sur son appareil. À la première connexion d’un membre, les données locales anciennes sont gardées dans une copie locale séparée; elles ne sont pas mélangées automatiquement aux données de l’entreprise. Les invitations envoient un e-mail uniquement lorsque le responsable clique sur « Inviter un membre ».
+Le responsable crée le seul espace entreprise lors de sa première connexion; les autres comptes doivent être invités avant leur première connexion. La première synchronisation du responsable importe ses dossiers présents sur son appareil. À la première connexion d’un membre, les données locales anciennes sont gardées dans une copie locale séparée; elles ne sont pas mélangées automatiquement aux données de l’entreprise. Les invitations envoient un e-mail uniquement lorsque le responsable clique sur « Inviter un membre ».
 
 La version ne doit pas être utilisée pour des dossiers clients réels avant la vérification des droits avec plusieurs comptes et la validation de la sauvegarde initiale.
 
