@@ -49,7 +49,7 @@
             fill="none" stroke="currentColor" stroke-width="30"
             stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M237 181h56l-36 72h44L216 354l20-80h-39z"
-            fill="#edf7aa"/>
+            fill="#75ddd3"/>
         </svg>
       </span>
       <span><b>Smart syst’m Pilot</b><small>GESTION D’ENTREPRISE</small></span>
