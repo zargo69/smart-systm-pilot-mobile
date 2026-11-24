@@ -2,6 +2,46 @@
 -- À appliquer uniquement après validation et pendant la mise en service.
 -- Ne modifie ni les utilisateurs, ni les données existantes.
 
+-- Une seule entreprise est autorisée pour cette installation. Le responsable crée le premier espace;
+-- les autres comptes doivent être ajoutés par invitation avant leur première connexion.
+create or replace function public.ssp_create_company(p_name text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  new_company_id uuid;
+begin
+  if auth.uid() is null then raise exception 'Connexion requise'; end if;
+  if p_name is null or length(trim(p_name)) not between 1 and 120 then
+    raise exception 'Nom d’entreprise invalide';
+  end if;
+
+  select company_id into new_company_id
+    from public.ssp_company_members
+   where user_id = auth.uid()
+   limit 1;
+  if new_company_id is not null then return new_company_id; end if;
+
+  perform pg_advisory_xact_lock(hashtext('ssp-single-company-installation')::bigint);
+  if exists (select 1 from public.ssp_companies) then
+    raise exception using message = 'SSP_COMPANY_ALREADY_EXISTS';
+  end if;
+
+  insert into public.ssp_companies (id, name, created_by)
+  values (gen_random_uuid(), trim(p_name), auth.uid())
+  returning id into new_company_id;
+
+  insert into public.ssp_company_members (company_id, user_id, role)
+  values (new_company_id, auth.uid(), 'admin');
+  return new_company_id;
+end;
+$;
+
+revoke all on function public.ssp_create_company(text) from public, anon;
+grant execute on function public.ssp_create_company(text) to authenticated;
+
 create or replace function public.ssp_is_company_admin(p_company_id uuid)
 returns boolean
 language sql
@@ -87,6 +127,9 @@ create policy ssp_companies_update_admin
 -- Vérifications de sécurité indispensables.
 do $$
 begin
+  if to_regprocedure('public.ssp_create_company(text)') is null then
+    raise exception 'Fonction ssp_create_company absente';
+  end if;
   if to_regprocedure('public.ssp_is_company_admin(uuid)') is null then
     raise exception 'Fonction ssp_is_company_admin absente';
   end if;
