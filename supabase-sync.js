@@ -185,6 +185,7 @@
     lastSnapshot = JSON.stringify(rowsFromData(data));
     writeState();
     ready = true;
+    window.dispatchEvent(new CustomEvent('ssp-sync-status', { detail: { status: 'synced' } }));
     schedule();
     console.info('[SSPSync] Initialisation terminée', { distant: remote.length, local: local.length });
     return { remoteCount: remote.length, localCount: local.length };
@@ -277,6 +278,7 @@
     timer = setTimeout(() => flush().catch(() => {}), 1200);
   }
   window.addEventListener('online', () => flush().catch(() => {}));
+  window.addEventListener('offline', () => window.dispatchEvent(new CustomEvent('ssp-sync-status', { detail: { status: 'offline' } })));
   window.SSPSync = Object.freeze({
     initialize,
     schedule,
