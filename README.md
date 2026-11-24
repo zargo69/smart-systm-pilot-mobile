@@ -1,6 +1,6 @@
 # Smart syst’m Pilot
 
-Application web progressive en français, pensée pour téléphone, tablette et ordinateur. Elle contient des parcours locaux de démonstration et un socle de préparation serveur. Elle n’est pas un service de gestion de production : les dossiers restent dans le navigateur et aucune synchronisation n’est configurée. Une recherche d’adresse transmet la requête à Nominatim ; l’affichage transmet la zone consultée au fournisseur du fond choisi (OpenFreeMap ou IGN) après action de l’utilisateur.
+Application web progressive en français, pensée pour téléphone, tablette et ordinateur. L’authentification Supabase est intégrée sur la branche `feature/supabase-integration`, mais les données métier restent locales dans le navigateur : la synchronisation distante n’est pas encore implémentée. Cette branche est une préversion technique, pas une version prête pour des données d’entreprise réelles. Une recherche d’adresse transmet la requête à Nominatim ; l’affichage transmet la zone consultée au fournisseur du fond choisi (OpenFreeMap ou IGN) après action de l’utilisateur.
 
 ## Ouvrir l’application
 
@@ -10,7 +10,7 @@ Au premier lancement, créez un profil responsable local avec un identifiant et 
 
 Les profils créés avant l’ajout de l’adresse e-mail la renseigneront lors de leur prochaine connexion ; jusque-là, ils peuvent utiliser leur identifiant.
 
-Sur un hébergement HTTPS, ouvrez l’adresse dans Safari, utilisez **Partager**, puis **Sur l’écran d’accueil**. Cette étape n’active ni comptes serveur, ni partage de données, ni synchronisation.
+Sur un hébergement HTTPS, ouvrez l’adresse dans Safari, utilisez **Partager**, puis **Sur l’écran d’accueil**. L’installation PWA ne rend pas les données synchronisées entre appareils.
 
 Dans le menu latéral bleu, faites défiler la liste des rubriques verticalement ; le bloc de profil et les réglages en bas restent accessibles séparément.
 
@@ -45,7 +45,7 @@ Pour les étapes détaillées et les limites, voir le [guide utilisateur](guide-
 
 ## Limites qui empêchent l’usage réel en entreprise
 
-Les listes, profils et montants sont dans le stockage local du navigateur. Il n’existe pas de compte serveur, de partage entre appareils, de sauvegarde distante, de base activée, de mode hors ligne avec synchronisation, ni de contrôle d’accès serveur. Le verrou local n’isole pas les profils les uns des autres et ne protège pas les données contre une personne qui contrôle l’appareil. L’actualisation entre onglets ne protège pas des modifications concurrentes. Les données de démonstration sont fictives : n’enregistrez aucune donnée client réelle ou sensible.
+Les listes, profils locaux et montants sont dans le stockage local du navigateur. L’authentification Supabase est disponible sur cette branche, mais les enregistrements métier ne sont pas encore reliés à la base distante : il n’existe donc pas encore de partage entre appareils, de sauvegarde distante des dossiers ni de mode hors ligne avec synchronisation. Le verrou local n’isole pas les profils les uns des autres et ne protège pas les données contre une personne qui contrôle l’appareil. L’actualisation entre onglets ne protège pas des modifications concurrentes. Les données de démonstration sont fictives : n’enregistrez aucune donnée client réelle ou sensible.
 
 Les documents restent des brouillons locaux : la signature tracée est une image conservée dans le navigateur, sans contrôle d’identité, preuve cryptographique ni certification. Les aperçus se sauvegardent en PDF depuis l’impression du navigateur ; aucun numéro définitif n’est attribué, aucun courriel n’est envoyé et aucune plateforme agréée de facturation électronique n’est connectée. Les paiements ne sont pas importés d’une banque. Les commandes ne partent pas aux fournisseurs.
 
