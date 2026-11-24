@@ -182,7 +182,7 @@ async function openApp(user) {
     const company = await loadOrCreateCompany(user);
     window.SSPCompanyStorage?.activate(company.companyId);
     if (window.SSP_SUPABASE_CONFIG?.syncEnabled === true && navigator.onLine) {
-      await window.SSPSync.initialize(company.companyId);
+      await window.SSPSync.initialize(company.companyId, company.role);
     }
 
     const displayName =
@@ -242,7 +242,7 @@ async function openApp(user) {
     const profileAvatar = document.querySelector('.profile-avatar');
 
     if (profileName) profileName.textContent = currentAccount.displayName;
-    if (profileRole) profileRole.textContent = 'Responsable';
+    if (profileRole) profileRole.textContent = currentAccount.role === 'admin' ? 'Responsable' : 'Équipe';
     if (profileAvatar) profileAvatar.textContent = initials(currentAccount.displayName);
   }
 
@@ -437,7 +437,21 @@ async function openApp(user) {
     getCurrentAccount: () => currentAccount,
     logout,
     updateProfile,
-    accountSettingsMarkup: () => ''
+    accountSettingsMarkup: () => '',
+    isAdmin: () => currentAccount?.role === 'admin'
+  });
+
+  window.SSPCompanyAdmin = Object.freeze({
+    async request(action, values = {}) {
+      if (!currentAccount || currentAccount.role !== 'admin') throw new Error('Action réservée au responsable.');
+      const { data, error } = await supabaseClient.functions.invoke('ssp-company-admin', { body: { action, ...values } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    async listMembers() { return (await this.request('list')).members || []; },
+    async inviteMember(email) { return this.request('invite', { email }); },
+    async removeMember(userId) { return this.request('remove', { userId }); }
   });
 
   initialize();
