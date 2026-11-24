@@ -38,10 +38,20 @@ function harness({ initialData = defaults, remote = [] } = {}) {
       throw new Error('Unexpected RPC ' + name);
     }
   };
-  const window = { SSPSupabase: { client }, addEventListener() {}, dispatchEvent() {} };
+  const listeners = new Map();
+  const window = {
+    SSPSupabase: { client },
+    addEventListener(type, listener) {
+      const entries = listeners.get(type) || [];
+      entries.push(listener);
+      listeners.set(type, entries);
+    },
+    dispatchEvent() {}
+  };
+  const navigator = { onLine: true };
   const data = structuredClone(initialData);
   const context = {
-    window, navigator: { onLine: true }, data,
+    window, navigator, data,
     localModulesDefault: structuredClone(defaults),
     localStorage: {
       getItem: key => local.has(key) ? local.get(key) : null,
@@ -53,8 +63,32 @@ function harness({ initialData = defaults, remote = [] } = {}) {
   };
   context.save = () => true;
   vm.runInNewContext(source, context, { filename: 'supabase-sync.js' });
-  return { api: window.SSPSync, context, calls, get rows() { return rows; }, set rows(v) { rows = v; }, local };
+  return {
+    api: window.SSPSync, context, calls, listeners, local,
+    setOnline(value) { navigator.onLine = value; },
+    get rows() { return rows; }, set rows(v) { rows = v; }
+  };
 }
+
+
+test('resumes initial synchronization when a device reconnects', async () => {
+  const h = harness({
+    initialData: {
+      ...structuredClone(defaults),
+      clients: [{ id: 'offline-client', name: 'Client hors ligne' }]
+    }
+  });
+  h.setOnline(false);
+  const result = await h.api.initialize('co-a', 'admin');
+  assert.equal(result.offline, true);
+  assert.equal(h.api.isReady(), false);
+  assert.equal(h.rows.length, 0);
+
+  h.setOnline(true);
+  await Promise.all((h.listeners.get('online') || []).map(listener => listener()));
+  assert.equal(h.api.isReady(), true);
+  assert.equal(h.rows.find(row => row.record_id === 'offline-client').payload.name, 'Client hors ligne');
+});
 
 test('imports remote records into a first-time member device', async () => {
   const h = harness({ remote: [{ company_id: 'co-a', collection: 'clients', record_id: 'c-1', payload: { id: 'c-1', name: 'Client distant' }, version: 1, deleted_at: null }] });
