@@ -1061,7 +1061,8 @@ function storeModuleForm(form, fileData = null) {
 }
 
 function render() {
-  const view = page === 'accueil' ? dashboardPage() : page === 'chantiers' ? sitesPage() : page === 'clients' ? clientsPage() : page === 'devis' ? quotesPage() : simplePage();
+  const views = { accueil: dashboardPage, chantiers: sitesPage, clients: clientsPage, devis: quotesPage, planning: planningPage, assistant: assistantPage, carte: mapPage, achats: purchasesPage, finances: financesPage, documents: documentsPage, rapports: reportsPage, parametres: settingsPage };
+  const view = (views[page] || dashboardPage)();
   $('#page-content').innerHTML = view;
   wire();
 }
