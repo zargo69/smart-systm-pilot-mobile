@@ -288,7 +288,7 @@
   }
   window.addEventListener('online', () => {
     if (companyId && !ready) {
-      initialize(companyId, syncRole).catch(error => {
+      return initialize(companyId, syncRole).catch(error => {
         console.error('[SSPSync] Reprise après reconnexion impossible :', error);
         window.dispatchEvent(new CustomEvent('ssp-sync-status', { detail: { status: 'error', message: error.message } }));
       });
