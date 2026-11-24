@@ -1,6 +1,6 @@
 # Smart syst’m Pilot
 
-Application web progressive en français, pensée pour téléphone, tablette et ordinateur. L’authentification Supabase est intégrée sur la branche `feature/supabase-integration`, mais les données métier restent locales dans le navigateur : la synchronisation distante n’est pas encore implémentée. Cette branche est une préversion technique, pas une version prête pour des données d’entreprise réelles. Une recherche d’adresse transmet la requête à Nominatim ; l’affichage transmet la zone consultée au fournisseur du fond choisi (OpenFreeMap ou IGN) après action de l’utilisateur.
+Application web progressive en français, pensée pour téléphone, tablette et ordinateur. La branche `feature/supabase-integration` contient l’authentification Supabase et un adaptateur de synchronisation versionnée, activé dans sa configuration. La version publique peut rester différente tant que le déploiement de cette branche n’a pas abouti. Cette branche reste une préversion technique : valider les parcours multi-comptes et la restauration des données avant un usage avec des dossiers réels. Une recherche d’adresse transmet la requête à Nominatim ; l’affichage transmet la zone consultée au fournisseur du fond choisi (OpenFreeMap ou IGN) après action de l’utilisateur.
 
 ## Ouvrir l’application
 
@@ -61,4 +61,4 @@ Pour les étapes détaillées, consultez le [guide utilisateur](guide-utilisateu
 
 ### Préparation des données métier
 
-La branche `feature/supabase-integration` contient une migration SQL, un adaptateur de synchronisation versionnée et des tests de régression. La synchronisation distante reste désactivée tant que la migration et les essais de sécurité multi-entreprises ne sont pas validés. Ne pas utiliser cette branche pour des dossiers clients réels avant la validation documentée dans `SUPABASE_SYNC_SETUP.md`.
+La branche `feature/supabase-integration` contient la migration SQL, l’adaptateur de synchronisation versionnée et des tests de régression. La synchronisation est activée dans cette branche ; sa disponibilité en production dépend du déploiement et des essais multi-comptes. Ne pas utiliser cette branche pour des dossiers clients réels avant la validation documentée dans `SUPABASE_SYNC_SETUP.md`.
