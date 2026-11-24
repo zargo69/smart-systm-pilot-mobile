@@ -1,28 +1,21 @@
 # Synchronisation métier Supabase — procédure de mise en service
 
 ## État actuel
-Le client de synchronisation versionné est présent dans `supabase-sync.js`. Il utilise les RPC `ssp_save_record` et `ssp_soft_delete_record`, compare les versions et refuse les collisions d'identifiants dont les contenus diffèrent. La synchronisation est volontairement désactivée dans `supabase-config.js` (`syncEnabled: false`) tant que la migration SQL et les tests RLS ne sont pas exécutés. Ne pas activer ce drapeau avant validation.
+Le client de synchronisation versionné est présent dans supabase-sync.js. Il compare les versions et bloque les collisions au lieu d’écraser les dossiers. Les dossiers et les réglages partagés sont accessibles aux membres de la même entreprise. Les changements de réglages et la gestion des membres sont réservés au responsable, avec vérification côté base et côté serveur.
 
-## Migrations
-1. Exécuter `supabase-migrations/001_business_records.sql` dans Supabase SQL Editor.
-2. Exécuter `supabase-migrations/002_private_company_files.sql` pour créer le bucket privé et ses politiques d'accès par entreprise.
-3. Ouvrir le projet Supabase, puis SQL Editor.
-4. Copier et exécuter le SQL des deux migrations dans l'ordre indiqué.
-5. Vérifier que les scripts se terminent sans erreur. Confirmer que `ssp_app_records` a RLS activé et que le bucket `ssp-company-files` est privé.
+La synchronisation reste désactivée dans supabase-config.js (syncEnabled: false). Cette procédure doit être validée avant toute activation ou publication.
 
-La migration est idempotente dans un schéma conforme et ne supprime aucune donnée. Si une table existante possède une structure différente, arrêter et inspecter le schéma avant de poursuivre.
+## Mise en service
+1. Faire une copie des données du responsable.
+2. Appliquer les migrations 001_business_records.sql, 002_private_company_files.sql puis 003_company_admin_access.sql dans cet ordre.
+3. Déployer la fonction Edge supabase/functions/ssp-company-admin/index.ts. La clé de service reste dans les secrets Supabase; ne jamais la copier dans le navigateur ou le dépôt.
+4. Vérifier avec deux comptes de la même entreprise que les dossiers sont visibles et modifiables par les deux, que seul le responsable peut modifier les réglages, inviter ou retirer un membre.
+5. Vérifier qu’un membre d’une autre entreprise ne peut ni lire ni modifier les dossiers.
+6. Après ces vérifications, activer syncEnabled dans supabase-config.js et publier la version validée.
 
-## Activation contrôlée
-Après migration, il faut encore tester avec deux comptes appartenant à deux entreprises différentes :
-- lecture et écriture dans sa propre entreprise ;
-- impossibilité de lire ou écrire dans l'entreprise voisine ;
-- import initial depuis un stockage local vide et non vide ;
-- collision d'identifiants avec payload différent : elle doit bloquer sans écrasement ;
-- modification concurrente : elle doit remonter un conflit ;
-- suppression logique et restauration contrôlée ;
-- reprise après perte réseau et redémarrage.
+La première synchronisation du responsable importe ses dossiers présents sur son appareil. À la première connexion d’un membre, les données locales anciennes sont gardées dans une copie locale séparée; elles ne sont pas mélangées automatiquement aux données de l’entreprise. Les invitations envoient un e-mail uniquement lorsque le responsable clique sur « Inviter un membre ».
 
-Quand ces tests sont tous réussis, changer `syncEnabled` en `true` dans `supabase-config.js`, puis vérifier le déploiement preview. Ne pas activer sur la production avant validation.
+La version ne doit pas être utilisée pour des dossiers clients réels avant la vérification des droits avec plusieurs comptes et la validation de la sauvegarde initiale.
 
 ## Limites connues
 - Les nouveaux fichiers joints peuvent être transférés vers le bucket privé `ssp-company-files` ; l'affichage et la récupération par URL signée doivent encore être intégrés et testés dans toutes les vues document.
