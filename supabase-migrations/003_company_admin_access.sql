@@ -9,7 +9,7 @@ returns uuid
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   new_company_id uuid;
 begin
@@ -37,7 +37,7 @@ begin
   values (new_company_id, auth.uid(), 'admin');
   return new_company_id;
 end;
-$;
+$$;
 
 revoke all on function public.ssp_create_company(text) from public, anon;
 grant execute on function public.ssp_create_company(text) to authenticated;
