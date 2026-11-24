@@ -151,10 +151,15 @@
       throw new Error('Le responsable doit d’abord synchroniser les données de l’entreprise.');
     }
     const joiningMemberForFirstTime = remote.length > 0 && role !== 'admin' && firstSyncOnThisDevice;
-    if (joiningMemberForFirstTime) {
-      // Les anciennes données propres à l’appareil ne sont jamais ajoutées en silence à l’entreprise.
+    const ownerOnNewDevice = remote.length > 0 && role === 'admin' && firstSyncOnThisDevice
+      && !local.some(row => row.collection !== 'settings');
+    if (joiningMemberForFirstTime || ownerOnNewDevice) {
+      // Les données locales d’un nouvel appareil ne sont jamais fusionnées silencieusement.
       if (local.length) {
-        try { localStorage.setItem('ssp-pre-team-sync-backup-v1:' + id, JSON.stringify(data)); }
+        const backupKey = joiningMemberForFirstTime
+          ? 'ssp-pre-team-sync-backup-v1:' + id
+          : 'ssp-pre-owner-sync-backup-v1:' + id;
+        try { localStorage.setItem(backupKey, JSON.stringify(data)); }
         catch { throw new Error('Libérez de l’espace ou exportez vos données locales avant de rejoindre l’entreprise.'); }
       }
       resetForRemoteCompany();
@@ -168,7 +173,7 @@
       mergeRemote(remote);
     }
     await uploadPendingFiles();
-    if (!joiningMemberForFirstTime && remote.length) {
+    if (!joiningMemberForFirstTime && !ownerOnNewDevice && remote.length) {
       // Les données locales du responsable sont ajoutées sans écraser les fiches distantes.
       await uploadLocalRows(remote);
     } else if (!remote.length && local.length) {
