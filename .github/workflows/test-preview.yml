@@ -20,6 +20,7 @@ jobs:
           test -f supabase-client.js
           test -f supabase-config.js
           test -f supabase-sync.js
+          test -f company-storage.js
           test -f supabase-migrations/001_business_records.sql
           test -f service-worker.js
 
@@ -28,6 +29,7 @@ jobs:
           node --check domain.js
           node --check app.js
           node --check modules.js
+          node --check company-storage.js
           node --check quotes.js
           node --check operations.js
           node --check supabase-config.js
