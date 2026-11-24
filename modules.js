@@ -57,7 +57,7 @@ function save({ restoring = false } = {}) {
   try { serialized = JSON.stringify(data); }
   catch { rollbackToLastSavedData(); notify('Les données ne peuvent pas être préparées pour l’enregistrement. Aucune modification n’a été gardée.'); return false; }
   try {
-    localStorage.setItem('ssp-data', serialized);
+    localStorage.setItem(window.SSPCompanyStorage?.storageKey?.() || 'ssp-data', serialized);
     lastPersistedData = serialized;
     window.SSPSync?.schedule();
     if (restoring && window.SSPStorageRecovery) window.SSPStorageRecovery = { notice: '', backupAvailable: false };
