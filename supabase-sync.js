@@ -135,8 +135,8 @@
         const localRow = currentBeforePull.get(key);
         const priorRow = previous.get(key);
         if (remoteRow.deleted_at) {
-          if (localRow && priorRow && JSON.stringify(localRow.payload) !== JSON.stringify(priorRow.payload)) {
-            conflicts.push(key + ' (modification locale et suppression distante)');
+          if (localRow && (!priorRow || JSON.stringify(localRow.payload) !== JSON.stringify(priorRow.payload))) {
+            conflicts.push(key + ' (fiche locale et suppression distante)');
           } else if (localRow) {
             data[remoteRow.collection] = data[remoteRow.collection].filter(item => String(item.id) !== remoteRow.record_id);
           }
@@ -183,6 +183,8 @@
       // Les suppressions sont envoyées en soft-delete avec contrôle de version.
       for (const [key,row] of previous) {
         if (currentByKey.has(key)) continue;
+        const remoteRow = remoteByKey.get(key);
+        if (remoteRow?.deleted_at) continue;
         const expected = Number(versions[key] || 0);
         if (!expected) throw new Error('Suppression locale non synchronisée : version distante inconnue pour ' + key);
         const { data: version, error } = await client().rpc('ssp_soft_delete_record', {
