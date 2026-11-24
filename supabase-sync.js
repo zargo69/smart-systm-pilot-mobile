@@ -9,7 +9,7 @@
   const collections = [
     'clients','sites','quotes','appointments','suppliers','purchases','invoices',
     'payments','expenses','documents','reports','auditLogs','prospects','followups',
-    'pricebook','tasks','timeEntries','stockItems','stockMovements'
+    'pricebook','tasks','opportunities','timeEntries','stockItems','stockMovements'
   ];
   let companyId = null;
   let ready = false;
