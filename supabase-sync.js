@@ -110,6 +110,9 @@
     } else if (local.length) {
       await uploadLocalRows(remote);
     }
+    if (typeof save === 'function' && save({ restoring: true }) === false) {
+      throw new Error('Les données distantes ont été chargées en mémoire mais leur copie locale a échoué. La synchronisation reste désactivée.');
+    }
     lastSnapshot = JSON.stringify(rowsFromData(data));
     ready = true;
     schedule();
@@ -120,10 +123,53 @@
     if (!ready || syncing || !navigator.onLine) return;
     syncing = true;
     try {
+      const previous = new Map((JSON.parse(lastSnapshot || '[]')).map(row => [stateKeyFor(row.collection,row.record_id), row]));
+      const remote = await listRemote();
+      const remoteByKey = new Map(remote.map(row => [stateKeyFor(row.collection,row.record_id), row]));
+      const currentBeforePull = new Map(rowsFromData(data).map(row => [stateKeyFor(row.collection,row.record_id), row]));
+      const conflicts = [];
+      for (const remoteRow of remote) {
+        const key = stateKeyFor(remoteRow.collection, remoteRow.record_id);
+        const knownVersion = Number(versions[key] || 0);
+        if (Number(remoteRow.version) <= knownVersion) continue;
+        const localRow = currentBeforePull.get(key);
+        const priorRow = previous.get(key);
+        if (remoteRow.deleted_at) {
+          if (localRow && priorRow && JSON.stringify(localRow.payload) !== JSON.stringify(priorRow.payload)) {
+            conflicts.push(key + ' (modification locale et suppression distante)');
+          } else if (localRow) {
+            data[remoteRow.collection] = data[remoteRow.collection].filter(item => String(item.id) !== remoteRow.record_id);
+          }
+          versions[key] = Number(remoteRow.version);
+          continue;
+        }
+        if (localRow && priorRow && JSON.stringify(localRow.payload) !== JSON.stringify(priorRow.payload)
+            && JSON.stringify(localRow.payload) !== JSON.stringify(remoteRow.payload)) {
+          conflicts.push(key + ' (modifié localement et à distance)');
+          continue;
+        }
+        if (localRow && !priorRow && JSON.stringify(localRow.payload) !== JSON.stringify(remoteRow.payload)) {
+          conflicts.push(key + ' (identifiant local déjà utilisé à distance)');
+          continue;
+        }
+        if (localRow) {
+          const index = data[remoteRow.collection].findIndex(item => String(item.id) === remoteRow.record_id);
+          if (index >= 0) data[remoteRow.collection][index] = remoteRow.payload;
+        } else {
+          if (!Array.isArray(data[remoteRow.collection])) data[remoteRow.collection] = [];
+          data[remoteRow.collection].push(remoteRow.payload);
+        }
+        versions[key] = Number(remoteRow.version);
+      }
+      if (conflicts.length) throw new Error('SSP_CONFLICT: ' + conflicts.slice(0, 8).join(', '));
       const current = rowsFromData(data);
       const currentByKey = new Map(current.map(row => [stateKeyFor(row.collection,row.record_id), row]));
-      const previous = new Map((JSON.parse(lastSnapshot || '[]')).map(row => [stateKeyFor(row.collection,row.record_id), row]));
       for (const [key,row] of currentByKey) {
+        const remoteRow = remoteByKey.get(key);
+        if (remoteRow && !remoteRow.deleted_at && JSON.stringify(remoteRow.payload) === JSON.stringify(row.payload)) {
+          versions[key] = Number(remoteRow.version);
+          continue;
+        }
         const before = previous.get(key);
         if (before && JSON.stringify(before.payload) === JSON.stringify(row.payload)) continue;
         const expected = Number(versions[key] || 0);
@@ -146,7 +192,10 @@
         if (error) throw error;
         versions[key] = Number(version);
       }
-      lastSnapshot = JSON.stringify(current);
+      if (typeof save === 'function' && save({ restoring: true }) === false) {
+        throw new Error('La copie locale après synchronisation a échoué. Réessayez après avoir libéré de l’espace.');
+      }
+      lastSnapshot = JSON.stringify(rowsFromData(data));
       writeState();
       window.dispatchEvent(new CustomEvent('ssp-sync-status', { detail: { status: 'synced' } }));
     } catch (error) {
