@@ -19,6 +19,8 @@ jobs:
           test -f auth-supabase.js
           test -f supabase-client.js
           test -f supabase-config.js
+          test -f supabase-sync.js
+          test -f supabase-migrations/001_business_records.sql
           test -f service-worker.js
 
       - name: Check JavaScript syntax
@@ -30,5 +32,6 @@ jobs:
           node --check operations.js
           node --check supabase-config.js
           node --check supabase-client.js
+          node --check supabase-sync.js
           node --check auth-supabase.js
           node --check service-worker.js
