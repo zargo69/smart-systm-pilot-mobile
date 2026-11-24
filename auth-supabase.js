@@ -143,11 +143,18 @@ async function loadOrCreateCompany(user) {
     if (result.error) throw result.error;
     membership = result.data;
   } catch (error) {
-    // Uniquement un repli hors ligne, lié à l'identifiant du compte authentifié.
-    if (navigator.onLine) throw error;
+    // Repli local uniquement si l'authentification est valide et que l'annuaire
+    // entreprise est temporairement inaccessible. Les erreurs de droits restent bloquantes.
+    const status = Number(error?.status || error?.statusCode);
+    const temporaryFailure = !navigator.onLine ||
+      error?.name === 'TypeError' ||
+      error?.name === 'AbortError' ||
+      (Number.isFinite(status) && status >= 500) ||
+      /network|fetch|timeout|temporarily unavailable|gateway/i.test(error?.message || '');
+    if (!temporaryFailure) throw error;
     let cached = null;
     try { cached = JSON.parse(localStorage.getItem(cacheKey) || 'null'); } catch {}
-    if (!cached?.companyId || !cached?.role) throw new Error('Aucun espace entreprise déjà vérifié pour ce compte hors ligne.');
+    if (!cached?.companyId || !cached?.role) throw error;
     return { companyId: cached.companyId, role: cached.role };
   }
 
