@@ -41,10 +41,11 @@
   function stateKeyFor(collection, id) { return collection + ':' + id; }
   const fileBucket = 'ssp-company-files';
   async function uploadPendingFiles() {
+    const pending = (data.documents || []).filter(record => record?.dataUrl && !record.storagePath);
+    if (!pending.length) return;
     const storage = client()?.storage?.from(fileBucket);
     if (!storage) throw new Error('Stockage Supabase indisponible.');
-    for (const record of data.documents || []) {
-      if (!record?.dataUrl || record.storagePath) continue;
+    for (const record of pending) {
       const response = await fetch(record.dataUrl);
       if (!response.ok) throw new Error('Impossible de lire le fichier local ' + (record.fileName || record.id));
       const blob = await response.blob();
