@@ -357,6 +357,7 @@ async function openApp(user) {
         button.textContent = 'Réessayer';
         return;
       }
+      window.history.replaceState({}, document.title, window.location.pathname);
       await openApp(data.user);
       notify('Votre mot de passe a été mis à jour.');
     });
@@ -423,6 +424,10 @@ async function openApp(user) {
       if (error) throw error;
 
       if (data.session?.user) {
+        if (new URLSearchParams(window.location.search).get('invite') === '1') {
+          renderNewPassword();
+          return;
+        }
         await openApp(data.session.user);
       } else {
         renderGate();
