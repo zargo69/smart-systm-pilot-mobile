@@ -13,6 +13,7 @@
   ];
   let companyId = null;
   let ready = false;
+  let syncRole = 'member';
   let syncing = false;
   let timer = null;
   let versions = {};
@@ -142,9 +143,17 @@
   async function initialize(id, role = 'member') {
     if (!client() || !id) throw new Error('Client Supabase ou entreprise manquant.');
     companyId = id;
+    syncRole = role;
+    ready = false;
     stateKey = 'ssp-sync-state-v1:' + id;
-    const firstSyncOnThisDevice = localStorage.getItem(stateKey) === null;
     readState();
+    if (!navigator.onLine) {
+      const localCount = rowsFromData(data).length;
+      lastSnapshot = JSON.stringify(rowsFromData(data));
+      window.dispatchEvent(new CustomEvent('ssp-sync-status', { detail: { status: 'offline' } }));
+      return { remoteCount: 0, localCount, offline: true };
+    }
+    const firstSyncOnThisDevice = localStorage.getItem(stateKey) === null;
     const remote = await listRemote();
     const local = rowsFromData(data);
     if (!remote.length && role !== 'admin') {
@@ -277,7 +286,16 @@
     clearTimeout(timer);
     timer = setTimeout(() => flush().catch(() => {}), 1200);
   }
-  window.addEventListener('online', () => flush().catch(() => {}));
+  window.addEventListener('online', () => {
+    if (companyId && !ready) {
+      initialize(companyId, syncRole).catch(error => {
+        console.error('[SSPSync] Reprise après reconnexion impossible :', error);
+        window.dispatchEvent(new CustomEvent('ssp-sync-status', { detail: { status: 'error', message: error.message } }));
+      });
+      return;
+    }
+    flush().catch(() => {});
+  });
   window.addEventListener('offline', () => window.dispatchEvent(new CustomEvent('ssp-sync-status', { detail: { status: 'offline' } })));
   window.SSPSync = Object.freeze({
     initialize,
