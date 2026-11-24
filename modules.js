@@ -740,9 +740,30 @@ if (document.visibilityState === 'visible') setTimeout(dispatchDueBrowserNotific
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') dispatchDueBrowserNotifications(); });
 setInterval(() => { if (document.visibilityState === 'visible') dispatchDueBrowserNotifications(); }, 15 * 60 * 1000);
 
+function refreshCompanyMembers() {
+  const root = document.querySelector('#company-team-members');
+  if (!root || !window.SSPAuth?.isAdmin?.()) return;
+  root.textContent = 'Chargement des accès…';
+  window.SSPCompanyAdmin.listMembers().then(members => {
+    if (!document.body.contains(root)) return;
+    root.innerHTML = members.map(member => {
+      const role = member.role === 'admin' ? 'Responsable' : 'Membre';
+      const remove = member.role === 'admin' ? '' : '<button type="button" class="btn secondary" data-team-remove="' + esc(member.userId) + '">Retirer l’accès</button>';
+      return '<div class="team-member-row"><span><b>' + esc(member.email || 'Compte sans adresse') + '</b><small>' + role + '</small></span>' + remove + '</div>';
+    }).join('') || '<p class="form-hint">Aucun membre enregistré.</p>';
+  }).catch(error => { if (document.body.contains(root)) root.textContent = error.message || 'Chargement des accès impossible.'; });
+}
+
 function settingsPage() {
-  let priorRestore = null; try { priorRestore = localStorage.getItem('ssp-pre-restore-backup-v1'); } catch { /* Le stockage local peut être indisponible. */ }
-  return `${heading('VOTRE ESPACE', 'Paramètres', 'Personnalisez les informations locales de l’entreprise.')} ${localNotice}<section class="panel settings-form"><form data-module-form="settings"><label>Nom de l’application<input name="appName" required maxlength="80" value="${esc(data.settings.appName)}"></label><label>Nom de l’entreprise<input name="companyName" required maxlength="120" value="${esc(data.settings.companyName)}"></label><div class="form-row"><label>Pays de référence<select name="country"><option value="FR" ${data.settings.country === 'FR' ? 'selected' : ''}>France</option><option value="CH" ${data.settings.country === 'CH' ? 'selected' : ''}>Suisse</option></select></label><label>Devise par défaut<select name="currency"><option value="EUR" ${data.settings.currency === 'EUR' ? 'selected' : ''}>EUR · Euro</option><option value="CHF" ${data.settings.currency === 'CHF' ? 'selected' : ''}>CHF · Franc suisse</option></select></label></div><p class="form-hint">La recherche d’adresse et la carte ne nécessitent ni compte ni clé API. La recherche ne part qu’après votre clic ; l’affichage transmet la zone visible au fond actif (OpenFreeMap ou, en France, IGN BD ORTHO). La disponibilité des services publics n’est pas garantie.</p><details class="address-provider-settings"><summary>Réglage avancé du service de recherche d’adresse</summary><label>Adresse du service compatible Nominatim<input name="addressSearchEndpoint" type="url" required maxlength="300" value="${esc(data.settings.addressSearchEndpoint || 'https://nominatim.openstreetmap.org/search')}" autocomplete="url"></label><p class="form-hint">Laissez la valeur par défaut pour OpenStreetMap. Ce réglage permet de changer de fournisseur compatible sans modifier l’application. Vérifiez les règles de confidentialité et d’utilisation du service choisi.</p></details><p class="form-hint">Les règles fiscales ne sont pas calculées automatiquement par ce réglage.</p><button class="btn primary">Enregistrer</button></form></section><section class="panel"><div class="panel-head"><div><h2>Copie de sauvegarde locale</h2><p>Exportez puis restaurez une copie JSON de ce navigateur.</p></div><button class="btn secondary" data-module-action="export">Exporter mes données</button></div><label class="import-label">Restaurer une copie<input id="import-file" type="file" accept="application/json,.json"></label><p class="form-hint">Avant de remplacer les données, l’application conserve automatiquement une copie locale de l’état actuel. Téléchargez-la ci-dessous si vous voulez garder un fichier externe.</p>${priorRestore ? '<button class="btn secondary" data-module-action="export-restore-backup">Télécharger la copie précédant la restauration</button>' : ''}<p class="form-hint">Le fichier peut contenir des coordonnées personnelles ; conservez-le dans un endroit sûr.</p><button class="btn danger" data-module-action="clear">Effacer les données locales</button></section>`;
+  const account = window.SSPAuth?.getCurrentAccount?.();
+  const isAdmin = account?.role === 'admin';
+  if (isAdmin) queueMicrotask(refreshCompanyMembers);
+  const settingsForm = isAdmin
+    ? '<section class="panel settings-form"><form data-module-form="settings"><label>Nom de l’application<input name="appName" required maxlength="80" value="' + esc(data.settings.appName) + '"></label><label>Nom de l’entreprise<input name="companyName" required maxlength="120" value="' + esc(data.settings.companyName) + '"></label><div class="form-row"><label>Pays de référence<select name="country"><option value="FR" ' + (data.settings.country === 'FR' ? 'selected' : '') + '>France</option><option value="CH" ' + (data.settings.country === 'CH' ? 'selected' : '') + '>Suisse</option></select></label><label>Devise par défaut<select name="currency"><option value="EUR" ' + (data.settings.currency === 'EUR' ? 'selected' : '') + '>EUR · Euro</option><option value="CHF" ' + (data.settings.currency === 'CHF' ? 'selected' : '') + '>CHF · Franc suisse</option></select></label></div><p class="form-hint">La recherche d’adresse et la carte ne nécessitent ni compte ni clé API. La recherche part seulement après votre clic.</p><details class="address-provider-settings"><summary>Réglage avancé du service de recherche d’adresse</summary><label>Adresse du service compatible Nominatim<input name="addressSearchEndpoint" type="url" required maxlength="300" value="' + esc(data.settings.addressSearchEndpoint || 'https://nominatim.openstreetmap.org/search') + '" autocomplete="url"></label><p class="form-hint">Vérifiez les règles de confidentialité et d’utilisation du service choisi.</p></details><p class="form-hint">Les règles fiscales ne sont pas calculées automatiquement par ce réglage.</p><button class="btn primary">Enregistrer les réglages partagés</button></form></section>'
+    : '<section class="panel"><h2>Réglages de l’entreprise</h2><p>Seul le responsable peut modifier ces réglages.</p><p><b>' + esc(data.settings.companyName) + '</b> · ' + esc(data.settings.currency || 'EUR') + '</p></section>';
+  const teamPanel = isAdmin ? '<section class="panel"><div class="panel-head"><div><h2>Accès de l’équipe</h2><p>Les membres invités peuvent consulter et modifier les dossiers de l’entreprise.</p></div></div><form class="team-invite-form" data-team-invite><label>Adresse e-mail du membre<input name="email" type="email" required maxlength="254" autocomplete="email" placeholder="nom@entreprise.fr"></label><button class="btn primary" type="submit">Inviter un membre</button></form><p class="form-hint">L’invitation enverra un e-mail uniquement après votre clic. Les membres ne peuvent pas gérer les accès ni les réglages.</p><div id="company-team-members" aria-live="polite">Chargement des accès…</div></section>' : '';
+  const backupPanel = '<section class="panel"><div class="panel-head"><div><h2>Copie de sauvegarde</h2><p>Exportez une copie de vos dossiers. Le fichier peut contenir des données personnelles.</p></div><button class="btn secondary" data-module-action="export">Exporter les données</button></div>' + (isAdmin ? '<label class="import-label">Restaurer une copie<input id="import-file" type="file" accept="application/json,.json"></label><p class="form-hint">La restauration remplace les données de cet appareil avant synchronisation.</p>' + (priorRestore ? '<button class="btn secondary" data-module-action="export-restore-backup">Télécharger la copie précédant la restauration</button>' : '') + '<button class="btn danger" data-module-action="clear">Effacer les données locales de cet appareil</button>' : '') + '</section>';
+  return heading('VOTRE ESPACE', 'Paramètres', isAdmin ? 'Réglages de l’entreprise et accès de l’équipe.' : 'Consultez les réglages partagés de l’entreprise.') + localNotice + settingsForm + teamPanel + backupPanel;
 }
 
 function moduleForm(type, title, content) {
@@ -898,6 +919,7 @@ function storeModuleForm(form, fileData = null) {
   const type = form.dataset.moduleForm;
   const values = Object.fromEntries(new FormData(form));
   if (type === 'settings') {
+    if (!window.SSPAuth?.isAdmin?.()) return notify('Seul le responsable peut modifier les réglages.');
     let addressSearchEndpoint;
     try { const endpoint = new URL(String(values.addressSearchEndpoint || '').trim()); if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password) throw new Error('url'); addressSearchEndpoint = endpoint.href; }
     catch { return notify('L’adresse du service d’adresses doit être une URL HTTPS valide.'); }
@@ -1008,6 +1030,21 @@ function render() {
 }
 
 document.addEventListener('submit', async event => {
+  const inviteForm = event.target.closest('[data-team-invite]');
+  if (inviteForm) {
+    event.preventDefault(); event.stopImmediatePropagation();
+    const email = String(new FormData(inviteForm).get('email') || '').trim();
+    const button = inviteForm.querySelector('button[type=submit]');
+    if (!email || !window.SSPCompanyAdmin) return notify('Gestion des accès indisponible.');
+    button.disabled = true;
+    try {
+      const result = await window.SSPCompanyAdmin.inviteMember(email);
+      inviteForm.reset(); refreshCompanyMembers();
+      notify(result.invitationSent ? 'Invitation envoyée à ' + email + '.' : 'Accès ajouté pour ' + email + '.');
+    } catch (error) { notify(error.message || 'Invitation impossible.'); }
+    finally { button.disabled = false; }
+    return;
+  }
   const form = event.target.closest('[data-module-form]');
   if (!form) return;
   event.preventDefault(); event.stopImmediatePropagation();
@@ -1040,6 +1077,15 @@ document.addEventListener('submit', event => {
 }, true);
 
 document.addEventListener('click', event => {
+  const removeMember = event.target.closest('[data-team-remove]');
+  if (removeMember) {
+    const userId = removeMember.dataset.teamRemove;
+    if (!confirm('Retirer cet accès à l’entreprise ?')) return;
+    removeMember.disabled = true;
+    window.SSPCompanyAdmin.removeMember(userId).then(() => { refreshCompanyMembers(); notify('Accès retiré.'); })
+      .catch(error => { removeMember.disabled = false; notify(error.message || 'Impossible de retirer cet accès.'); });
+    return;
+  }
   const documentView = event.target.closest('[data-document-view]');
   if (documentView) { documentsView = documentView.dataset.documentView; render(); return; }
   const deletePurchase = event.target.closest('[data-purchase-delete]');
