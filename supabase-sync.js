@@ -5,7 +5,7 @@
 (() => {
   'use strict';
   const client = () => window.SSPSupabase?.client;
-  const stateKey = 'ssp-sync-state-v1';
+  let stateKey = 'ssp-sync-state-v1';
   const collections = [
     'clients','sites','quotes','appointments','suppliers','purchases','invoices',
     'payments','expenses','documents','reports','auditLogs','prospects','followups',
@@ -99,6 +99,7 @@
   async function initialize(id) {
     if (!client() || !id) throw new Error('Client Supabase ou entreprise manquant.');
     companyId = id;
+    stateKey = 'ssp-sync-state-v1:' + id;
     readState();
     const remote = await listRemote();
     const local = rowsFromData(data);
