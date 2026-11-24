@@ -4,5 +4,7 @@
 */
 window.SSP_SUPABASE_CONFIG = Object.freeze({
   url: 'https://ueyamyqbsimmpourinmz.supabase.co',
-  anonKey: 'sb_publishable_fye6EzGFZvpMYUyKVeEhpw_NiC5f5Np'
+  anonKey: 'sb_publishable_fye6EzGFZvpMYUyKVeEhpw_NiC5f5Np',
+  // À activer uniquement après exécution et validation de supabase-migrations/001_business_records.sql.
+  syncEnabled: false
 });
