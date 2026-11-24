@@ -5,6 +5,6 @@
 window.SSP_SUPABASE_CONFIG = Object.freeze({
   url: 'https://ueyamyqbsimmpourinmz.supabase.co',
   anonKey: 'sb_publishable_fye6EzGFZvpMYUyKVeEhpw_NiC5f5Np',
-  // À activer uniquement après les migrations 001–003, le déploiement de la fonction Edge et la validation des droits avec plusieurs comptes.
-  syncEnabled: false
+  // Les dossiers partagés utilisent les contrôles de version, l'authentification et les politiques RLS Supabase.
+  syncEnabled: true
 });
