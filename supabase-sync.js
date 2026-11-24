@@ -102,9 +102,13 @@
     readState();
     const remote = await listRemote();
     const local = rowsFromData(data);
-    if (remote.length && local.length) mergeRemote(remote);
-    else if (remote.length) mergeRemote(remote);
-    else if (local.length) await uploadLocalRows(remote);
+    if (remote.length) {
+      mergeRemote(remote);
+      // Les fiches locales absentes du serveur sont ajoutées sans toucher aux fiches existantes.
+      await uploadLocalRows(remote);
+    } else if (local.length) {
+      await uploadLocalRows(remote);
+    }
     lastSnapshot = JSON.stringify(rowsFromData(data));
     ready = true;
     schedule();
