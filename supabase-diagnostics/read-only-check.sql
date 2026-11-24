@@ -18,6 +18,22 @@ with checks (check_name, ok, detail) as (
       'Row Level Security activé'
     ),
     (
+      'Politiques RLS métier',
+      (
+        select count(*) = 4
+        from pg_policies p
+        where p.schemaname = 'public'
+          and p.tablename = 'ssp_app_records'
+          and p.policyname in (
+            'ssp_app_records_select_member',
+            'ssp_app_records_insert_member',
+            'ssp_app_records_update_member',
+            'ssp_app_records_delete_member'
+          )
+      ),
+      'Quatre politiques d’accès entreprise attendues'
+    ),
+    (
       'RPC ssp_is_company_member',
       to_regprocedure('public.ssp_is_company_member(uuid)') is not null,
       'Fonction de contrôle d’appartenance présente'
