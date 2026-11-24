@@ -9,9 +9,9 @@
 ## Protection des comptes et données
 Ne jamais ajouter une clé `sb_secret_*` ou `service_role` au dépôt ou au navigateur. Les tables doivent être protégées par RLS. Les données métier ne doivent pas être utilisées en production tant que la migration SQL, les tests RLS multi-entreprises, la reprise hors ligne et le stockage des pièces jointes ne sont pas validés.
 
-Le stockage local historique `ssp-data` est conservé. Lors de la première connexion, il est attribué au premier espace entreprise qui l'ouvre et copié dans sa clé locale dédiée. Il n'est pas supprimé. Les comptes suivants obtiennent un espace local distinct.
+Le stockage local historique `ssp-data` est conservé. Lors de la première connexion, il est attribué au premier espace entreprise qui l'ouvre et copié dans sa clé locale dédiée. Il n'est pas supprimé. Les comptes invités accèdent aux données partagées de l'entreprise après connexion. Les comptes non invités ne créent pas de nouvel espace.
 
-Le rattachement entreprise déjà vérifié est mis en cache par identifiant utilisateur afin de permettre l'ouverture de l'espace local hors ligne après une première connexion en ligne. Ce cache n'accorde aucun accès serveur et ne remplace pas l'authentification.
+Le rattachement entreprise déjà vérifié est mis en cache par identifiant utilisateur afin de permettre l'ouverture de l'espace local hors ligne après une première connexion en ligne. Ce cache n'accorde aucun accès serveur et ne remplace pas l'authentification. Le responsable crée l'unique entreprise lors de sa première connexion; les autres comptes doivent être invités par le responsable et deviennent membres de cette même entreprise.
 
 ## Mise en service de l’espace partagé
 La synchronisation reste désactivée dans supabase-config.js tant que les étapes ci-dessous ne sont pas terminées.
