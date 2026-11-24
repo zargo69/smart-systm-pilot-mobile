@@ -740,6 +740,40 @@ if (document.visibilityState === 'visible') setTimeout(dispatchDueBrowserNotific
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') dispatchDueBrowserNotifications(); });
 setInterval(() => { if (document.visibilityState === 'visible') dispatchDueBrowserNotifications(); }, 15 * 60 * 1000);
 
+let lastSyncNotice = '';
+window.addEventListener('ssp-sync-status', event => {
+  const label = document.querySelector('#sync-status-label');
+  const mode = document.querySelector('#sync-mode-label');
+  const dot = document.querySelector('.status-dot');
+  const state = event.detail?.status;
+  if (!label || !mode) return;
+  if (state === 'synced') {
+    label.textContent = 'Synchronisé avec l’entreprise';
+    mode.textContent = 'Les dossiers et réglages partagés sont à jour.';
+    label.title = '';
+    lastSyncNotice = '';
+    return;
+  }
+  if (state === 'offline') {
+    label.textContent = 'Hors connexion — copie locale conservée';
+    mode.textContent = 'Les changements seront synchronisés au retour de la connexion.';
+    return;
+  }
+  if (state === 'error') {
+    const detail = String(event.detail?.message || '');
+    label.textContent = 'Synchronisation en pause — copie locale conservée';
+    mode.textContent = 'Le partage reprendra après correction ou reconnexion.';
+    label.title = detail;
+    dot?.classList.remove('saved');
+    if (detail !== lastSyncNotice) {
+      notify(/SSP_(CONFLICT|MIGRATION_CONFLICT)/.test(detail)
+        ? 'Une fiche a changé à deux endroits. Les données restent sauvegardées ici; vérifiez la fiche avant de réessayer.'
+        : 'La synchronisation est en pause. Vos changements restent enregistrés sur cet appareil.');
+      lastSyncNotice = detail;
+    }
+  }
+});
+
 function refreshCompanyMembers() {
   const root = document.querySelector('#company-team-members');
   if (!root || !window.SSPAuth?.isAdmin?.()) return;
@@ -762,7 +796,10 @@ function settingsPage() {
     ? '<section class="panel settings-form"><form data-module-form="settings"><label>Nom de l’application<input name="appName" required maxlength="80" value="' + esc(data.settings.appName) + '"></label><label>Nom de l’entreprise<input name="companyName" required maxlength="120" value="' + esc(data.settings.companyName) + '"></label><div class="form-row"><label>Pays de référence<select name="country"><option value="FR" ' + (data.settings.country === 'FR' ? 'selected' : '') + '>France</option><option value="CH" ' + (data.settings.country === 'CH' ? 'selected' : '') + '>Suisse</option></select></label><label>Devise par défaut<select name="currency"><option value="EUR" ' + (data.settings.currency === 'EUR' ? 'selected' : '') + '>EUR · Euro</option><option value="CHF" ' + (data.settings.currency === 'CHF' ? 'selected' : '') + '>CHF · Franc suisse</option></select></label></div><p class="form-hint">La recherche d’adresse et la carte ne nécessitent ni compte ni clé API. La recherche part seulement après votre clic.</p><details class="address-provider-settings"><summary>Réglage avancé du service de recherche d’adresse</summary><label>Adresse du service compatible Nominatim<input name="addressSearchEndpoint" type="url" required maxlength="300" value="' + esc(data.settings.addressSearchEndpoint || 'https://nominatim.openstreetmap.org/search') + '" autocomplete="url"></label><p class="form-hint">Vérifiez les règles de confidentialité et d’utilisation du service choisi.</p></details><p class="form-hint">Les règles fiscales ne sont pas calculées automatiquement par ce réglage.</p><button class="btn primary">Enregistrer les réglages partagés</button></form></section>'
     : '<section class="panel"><h2>Réglages de l’entreprise</h2><p>Seul le responsable peut modifier ces réglages.</p><p><b>' + esc(data.settings.companyName) + '</b> · ' + esc(data.settings.currency || 'EUR') + '</p></section>';
   const teamPanel = isAdmin ? '<section class="panel"><div class="panel-head"><div><h2>Accès de l’équipe</h2><p>Les membres invités peuvent consulter et modifier les dossiers de l’entreprise.</p></div></div><form class="team-invite-form" data-team-invite><label>Adresse e-mail du membre<input name="email" type="email" required maxlength="254" autocomplete="email" placeholder="nom@entreprise.fr"></label><button class="btn primary" type="submit">Inviter un membre</button></form><p class="form-hint">L’invitation enverra un e-mail uniquement après votre clic. Les membres ne peuvent pas gérer les accès ni les réglages.</p><div id="company-team-members" aria-live="polite">Chargement des accès…</div></section>' : '';
-  const backupPanel = '<section class="panel"><div class="panel-head"><div><h2>Copie de sauvegarde</h2><p>Exportez une copie de vos dossiers. Le fichier peut contenir des données personnelles.</p></div><button class="btn secondary" data-module-action="export">Exporter les données</button></div>' + (isAdmin ? '<label class="import-label">Restaurer une copie<input id="import-file" type="file" accept="application/json,.json"></label><p class="form-hint">La restauration remplace les données de cet appareil avant synchronisation.</p>' + (priorRestore ? '<button class="btn secondary" data-module-action="export-restore-backup">Télécharger la copie précédant la restauration</button>' : '') + '<button class="btn danger" data-module-action="clear">Effacer les données locales de cet appareil</button>' : '') + '</section>';
+  const oldSyncBackup = account?.companyId && localStorage.getItem('ssp-pre-team-sync-backup-v1:' + account.companyId) !== null;
+  const ownerSyncBackup = account?.companyId && localStorage.getItem('ssp-pre-owner-sync-backup-v1:' + account.companyId) !== null;
+  const syncBackupButtons = (oldSyncBackup ? '<button class="btn secondary" data-sync-backup-export="team">Télécharger la copie antérieure à l’arrivée dans l’entreprise</button>' : '') + (ownerSyncBackup ? '<button class="btn secondary" data-sync-backup-export="owner">Télécharger la copie antérieure à la synchronisation</button>' : '');
+  const backupPanel = '<section class="panel"><div class="panel-head"><div><h2>Copie de sauvegarde</h2><p>Exportez une copie de vos dossiers. Le fichier peut contenir des données personnelles.</p></div><button class="btn secondary" data-module-action="export">Exporter les données</button></div>' + syncBackupButtons + (isAdmin ? '<label class="import-label">Restaurer une copie<input id="import-file" type="file" accept="application/json,.json"></label><p class="form-hint">La restauration remplace les données de cet appareil avant synchronisation.</p>' + (priorRestore ? '<button class="btn secondary" data-module-action="export-restore-backup">Télécharger la copie précédant la restauration</button>' : '') + '<button class="btn danger" data-module-action="clear">Effacer les données locales de cet appareil</button>' : '') + '</section>';
   return heading('VOTRE ESPACE', 'Paramètres', isAdmin ? 'Réglages de l’entreprise et accès de l’équipe.' : 'Consultez les réglages partagés de l’entreprise.') + localNotice + settingsForm + teamPanel + backupPanel;
 }
 
@@ -1077,6 +1114,18 @@ document.addEventListener('submit', event => {
 }, true);
 
 document.addEventListener('click', event => {
+  const syncBackup = event.target.closest('[data-sync-backup-export]');
+  if (syncBackup) {
+    const account = window.SSPAuth?.getCurrentAccount?.();
+    const kind = syncBackup.dataset.syncBackupExport;
+    const key = (kind === 'team' ? 'ssp-pre-team-sync-backup-v1:' : 'ssp-pre-owner-sync-backup-v1:') + (account?.companyId || '');
+    const backup = localStorage.getItem(key);
+    if (!backup) return notify('Aucune copie antérieure disponible sur cet appareil.');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([backup], { type: 'application/json' }));
+    link.download = 'smart-systm-pilot-copie-avant-synchronisation.json';
+    link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000); return;
+  }
   const removeMember = event.target.closest('[data-team-remove]');
   if (removeMember) {
     const userId = removeMember.dataset.teamRemove;
