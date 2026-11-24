@@ -59,6 +59,7 @@ function save({ restoring = false } = {}) {
   try {
     localStorage.setItem('ssp-data', serialized);
     lastPersistedData = serialized;
+    window.SSPSync?.schedule();
     if (restoring && window.SSPStorageRecovery) window.SSPStorageRecovery = { notice: '', backupAvailable: false };
     $('.status-dot')?.classList.add('saved');
     setTimeout(() => $('.status-dot')?.classList.remove('saved'), 500);
