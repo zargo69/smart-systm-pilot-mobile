@@ -404,7 +404,7 @@ async function openApp(user) {
 
   window.addEventListener('online', () => {
     if (currentAccount && window.SSP_SUPABASE_CONFIG?.syncEnabled === true && !window.SSPSync?.isReady()) {
-      window.SSPSync?.initialize(currentAccount.companyId)
+      window.SSPSync?.initialize(currentAccount.companyId, currentAccount.role)
         .catch(error => console.error('[SSP] Reprise de synchronisation impossible :', error));
     } else if (currentAccount && window.SSPSync?.isReady()) {
       window.SSPSync.flush().catch(() => {});
