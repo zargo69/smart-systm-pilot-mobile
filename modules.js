@@ -11,6 +11,7 @@ const starterPricebook = [
   { id: 'presta-controller', name: 'Remplacement d’automate ou de module', category: 'GTB / GTC', unit: 'unité', unitPriceHT: null, materialUnitCostHT: null, hoursPerUnit: null, hourlyCostHT: null, otherUnitCostHT: 0, vatRate: 20 }
 ];
 const localModulesDefault = {
+  clients: [], sites: [], quotes: [],
   appointments: [], suppliers: [], purchases: [], invoices: [], payments: [],
   expenses: [], documents: [], reports: [], auditLogs: [], prospects: [], opportunities: [], followups: [], pricebook: starterPricebook,
   settings: { appName: 'Smart syst’m Pilot', companyName: 'Mon entreprise', country: 'FR', currency: 'EUR', addressSearchEndpoint: 'https://nominatim.openstreetmap.org/search' }
