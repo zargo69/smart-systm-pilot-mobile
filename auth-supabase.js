@@ -173,6 +173,9 @@ async function openApp(user) {
 
   try {
     const company = await loadOrCreateCompany(user);
+    if (window.SSP_SUPABASE_CONFIG?.syncEnabled === true) {
+      await window.SSPSync.initialize(company.companyId);
+    }
 
     const displayName =
       user.user_metadata?.display_name ||
