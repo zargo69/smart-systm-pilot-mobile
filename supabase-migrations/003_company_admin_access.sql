@@ -42,6 +42,10 @@ $;
 revoke all on function public.ssp_create_company(text) from public, anon;
 grant execute on function public.ssp_create_company(text) to authenticated;
 
+-- Clé nécessaire aux invitations idempotentes de la même personne.
+create unique index if not exists ssp_company_members_company_user_uidx
+  on public.ssp_company_members(company_id, user_id);
+
 create or replace function public.ssp_is_company_admin(p_company_id uuid)
 returns boolean
 language sql
