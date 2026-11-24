@@ -832,3 +832,25 @@ html, body, .main-area { background: var(--paper); }
   :root { --muted: #405965; --line: #b6c9c7; }
   .subheading, .panel-head p, .section-title p, .metric-note { color: #405965; }
 }
+
+
+.saved-view-controls {
+  display: flex; flex-wrap: wrap; align-items: end; gap: 9px;
+  margin: -7px 0 18px; padding: 13px 15px;
+  border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.88);
+}
+.saved-view-controls label {
+  display: grid; gap: 5px; min-width: min(250px,100%);
+  color: var(--muted); font-size: 12px; font-weight: 650;
+}
+.saved-view-controls select {
+  min-height: 42px; padding: 0 12px; border: 1px solid var(--line);
+  border-radius: 9px; color: var(--ink); background: #fff; font: inherit;
+}
+.saved-view-controls .btn { min-height: 42px; }
+.saved-view-controls .btn:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 560px) {
+  .saved-view-controls { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px; padding: 12px; }
+  .saved-view-controls label { grid-column: 1 / -1; min-width: 0; }
+  .saved-view-controls .btn { padding-inline: 9px; font-size: 12px; }
+}
