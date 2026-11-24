@@ -22,6 +22,7 @@ jobs:
           test -f supabase-sync.js
           test -f company-storage.js
           test -f supabase-migrations/001_business_records.sql
+          test -f supabase-migrations/002_private_company_files.sql
           test -f service-worker.js
 
       - name: Run synchronization regression tests
