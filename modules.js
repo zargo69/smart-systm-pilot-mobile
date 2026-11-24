@@ -291,16 +291,25 @@ function openAuditedRecord(collection, record, returnToSiteId = '') {
   const archived = !!record.archivedAt;
   const isPhoto = record.kind === 'photo';
   const title = record.name || record.title || 'Document';
-  const fileLine = collection === 'documents' ? `${isPhoto ? `<img class="op-audited-photo" src="${esc(record.dataUrl)}" alt="${esc(title)}">` : ''}<p><b>Fichier</b><br>${esc(record.fileName || 'Photo de chantier')}</p>` : `<p><b>Type</b><br>${esc(record.kind)}</p><p>${esc(record.body)}</p>`;
+  const fileLine = collection === 'documents' ? `${isPhoto ? `<img class="op-audited-photo" src="${esc(record.dataUrl || '')}" alt="${esc(title)}">` : ''}<p><b>Fichier</b><br>${esc(record.fileName || 'Photo de chantier')}</p>` : `<p><b>Type</b><br>${esc(record.kind)}</p><p>${esc(record.body)}</p>`;
   const buttons = collection === 'documents' ? `<button class="btn secondary" data-audited-action="download">Télécharger</button>` : '';
   const actions = archived
     ? `<div class="form-actions">${buttons}<button class="btn secondary" data-audited-action="restore">Restaurer</button><button class="btn danger" data-audited-action="purge">Supprimer définitivement</button></div>`
     : `<div class="form-actions">${buttons}<button class="btn secondary" data-audited-action="edit">Modifier</button><button class="btn danger" data-audited-action="archive">Archiver</button></div>`;
   modal(title, `<div class="detail-card"><span class="pill neutral">${archived ? 'Archivé' : collection === 'reports' ? 'Brouillon local' : isPhoto ? 'Photo de chantier' : 'Document local'}</span>${fileLine}<p><b>Chantier</b><br>${esc(siteLabel(record))}</p><p><b>Date</b><br>${esc(record.date || '')}</p>${recordAuditSummary(collection, record)}${actions}${archived ? '<p class="form-hint">La suppression définitive est irréversible. L’entrée d’historique sera conservée, sans le fichier.</p>' : '<p class="form-hint">Archiver masque l’élément des listes actives sans effacer son contenu.</p>'}</div>`);
   const root = $('#modal-content');
+  let signedFileUrl = '';
+  if (record.storagePath && window.SSPSync?.isReady()) {
+    window.SSPSync.getFileUrl(record.storagePath).then(url => {
+      signedFileUrl = url;
+      const photo = root.querySelector('.op-audited-photo');
+      if (photo) photo.src = url;
+    }).catch(error => notify('Impossible de charger le fichier privé : ' + error.message));
+  }
   root.querySelector('[data-audited-action="download"]')?.addEventListener('click', () => {
-    if (!record.dataUrl) return notify('Le contenu du fichier est indisponible.');
-    const link = document.createElement('a'); link.href = record.dataUrl; link.download = record.fileName || 'document'; link.click();
+    const source = record.dataUrl || signedFileUrl;
+    if (!source) return notify('Le contenu du fichier est indisponible ou encore en cours de chargement.');
+    const link = document.createElement('a'); link.href = source; link.download = record.fileName || 'document'; link.target = '_blank'; link.rel = 'noopener'; link.click();
   });
   root.querySelector('[data-audited-action="edit"]')?.addEventListener('click', () => openAuditedEditor(collection, record));
   root.querySelector('[data-audited-action="archive"]')?.addEventListener('click', () => {
