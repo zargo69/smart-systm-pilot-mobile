@@ -24,7 +24,7 @@ jobs:
           test -f supabase-migrations/001_business_records.sql
           test -f service-worker.js
 
-      - name: Check JavaScript syntax
+      - name: Run synchronization regression tests\n        run: node --test tests/*.test.js\n\n      - name: Check JavaScript syntax
         run: |
           node --check domain.js
           node --check app.js
