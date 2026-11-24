@@ -64,6 +64,15 @@ test('imports remote records into a first-time member device', async () => {
   assert.ok(h.local.has('ssp-sync-state-v1:co-a'));
 });
 
+test('syncs sales opportunities as shared business records', async () => {
+  const opportunity = { id: 'opp-1', title: 'Maintenance GTB', stage: 'Devis envoyé', amountHT: 2500 };
+  const h = harness({ initialData: { ...structuredClone(defaults), opportunities: [opportunity] } });
+  await h.api.initialize('co-a', 'admin');
+  const row = h.rows.find(item => item.collection === 'opportunities' && item.record_id === 'opp-1');
+  assert.equal(row.payload.stage, 'Devis envoyé');
+  assert.equal(row.payload.amountHT, 2500);
+});
+
 test('owner on a new device adopts existing shared records and settings', async () => {
   const remote = [
     { company_id: 'co-a', collection: 'clients', record_id: 'c-1', payload: { id: 'c-1', name: 'Client partagé' }, version: 1, deleted_at: null },
