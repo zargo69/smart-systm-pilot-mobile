@@ -120,7 +120,12 @@
       await openApp(data.user);
     } catch (error) {
       console.error('[SSP] Échec de connexion :', error);
-      renderGate('Connexion impossible. Vérifiez votre adresse e-mail et votre mot de passe.');
+      const message = /invalid login credentials/i.test(error?.message || '')
+        ? 'Adresse e-mail ou mot de passe incorrect.'
+        : /email not confirmed/i.test(error?.message || '')
+          ? 'Votre adresse e-mail doit être confirmée avant la connexion.'
+          : 'Connexion impossible pour le moment. Réessayez dans quelques instants.';
+      renderGate(message);
     }
   }
 
@@ -265,35 +270,85 @@ async function openApp(user) {
         ${brand()}
         <p class="eyebrow">RÉINITIALISATION</p>
         <h1>Mot de passe oublié ?</h1>
-        <p class="auth-intro">
-          Indiquez votre adresse e-mail pour recevoir un lien de réinitialisation.
-        </p>
+        <p class="auth-intro">Indiquez l’adresse e-mail de votre compte. Un lien sécurisé vous permettra de choisir un nouveau mot de passe.</p>
         <form id="auth-recovery-form" class="auth-form">
           <label>Adresse e-mail
-            <input name="email" type="email" required autocomplete="email">
+            <input name="email" type="email" required maxlength="254" autocomplete="email">
           </label>
           <p class="auth-message" role="alert"></p>
           <button class="btn primary" type="submit">Envoyer le lien</button>
         </form>
-        <button type="button" class="auth-link"
-          data-auth-action="back-to-login">Retour à la connexion</button>
+        <button type="button" class="auth-link" data-auth-action="back-to-login">Retour à la connexion</button>
       </section>`;
 
-    screen.querySelector('#auth-recovery-form')
-      ?.addEventListener('submit', async event => {
-        event.preventDefault();
-        const email = new FormData(event.currentTarget).get('email')
-          ?.toString().trim().toLowerCase();
-
-        const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
-
-        if (error) {
-          showMessage('Impossible d’envoyer le lien. Vérifiez votre adresse.');
-          return;
-        }
-
+    screen.querySelector('#auth-recovery-form')?.addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const email = new FormData(form).get('email')?.toString().trim().toLowerCase();
+      const button = form.querySelector('button[type="submit"]');
+      if (!email) return showMessage('Renseignez une adresse e-mail valide.');
+      button.disabled = true;
+      button.textContent = 'Envoi en cours…';
+      try {
+        const redirectTo = window.location.origin + window.location.pathname;
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+        if (error) throw error;
         showMessage('Si cette adresse correspond à un compte, un e-mail de réinitialisation sera envoyé.');
-      });
+        button.textContent = 'Lien demandé';
+      } catch (error) {
+        console.error('[SSP] Échec de récupération du mot de passe :', error);
+        const message = /rate limit/i.test(error?.message || '')
+          ? 'Limite temporaire d’envoi atteinte. N’essayez plus de renvoyer de lien pour le moment.'
+          : 'Impossible d’envoyer le lien. Vérifiez la configuration e-mail Supabase.';
+        showMessage(message);
+        button.disabled = false;
+        button.textContent = 'Réessayer';
+      }
+    });
+  }
+
+  function renderNewPassword() {
+    screen.hidden = false;
+    document.querySelector('.app-shell').hidden = true;
+    document.querySelector('.mobile-nav').hidden = true;
+    screen.innerHTML = `
+      <section class="auth-card">
+        ${brand()}
+        <p class="eyebrow">SÉCURITÉ DU COMPTE</p>
+        <h1>Nouveau mot de passe</h1>
+        <p class="auth-intro">Choisissez un mot de passe d’au moins 10 caractères.</p>
+        <form id="auth-new-password-form" class="auth-form">
+          <label>Nouveau mot de passe
+            <input name="password" type="password" required minlength="10" maxlength="256" autocomplete="new-password">
+          </label>
+          <label>Confirmer le mot de passe
+            <input name="confirmPassword" type="password" required minlength="10" maxlength="256" autocomplete="new-password">
+          </label>
+          <p class="auth-message" role="alert"></p>
+          <button class="btn primary" type="submit">Enregistrer le mot de passe</button>
+        </form>
+      </section>`;
+
+    screen.querySelector('#auth-new-password-form')?.addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const values = Object.fromEntries(new FormData(form));
+      if (values.password !== values.confirmPassword) return showMessage('Les deux mots de passe ne correspondent pas.');
+      if (String(values.password).length < 10) return showMessage('Choisissez au moins 10 caractères.');
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      button.textContent = 'Enregistrement…';
+      const { data, error } = await supabaseClient.auth.updateUser({ password: values.password });
+      if (error) {
+        console.error('[SSP] Échec du changement de mot de passe :', error);
+        showMessage('Le lien est invalide ou expiré. Demandez un nouveau lien de récupération.');
+        button.disabled = false;
+        button.textContent = 'Réessayer';
+        return;
+      }
+      await openApp(data.user);
+      notify('Votre mot de passe a été mis à jour.');
+    });
   }
 
   document.addEventListener('click', event => {
@@ -329,6 +384,10 @@ async function openApp(user) {
   }
 
   supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      renderNewPassword();
+      return;
+    }
     if (event === 'SIGNED_OUT' && currentAccount) {
       clearTimeout(idleTimer);
       currentAccount = null;
