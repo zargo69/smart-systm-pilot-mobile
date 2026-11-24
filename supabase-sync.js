@@ -39,6 +39,31 @@
     return rows;
   }
   function stateKeyFor(collection, id) { return collection + ':' + id; }
+  const fileBucket = 'ssp-company-files';
+  async function uploadPendingFiles() {
+    const storage = client()?.storage?.from(fileBucket);
+    if (!storage) throw new Error('Stockage Supabase indisponible.');
+    for (const record of data.documents || []) {
+      if (!record?.dataUrl || record.storagePath) continue;
+      const response = await fetch(record.dataUrl);
+      if (!response.ok) throw new Error('Impossible de lire le fichier local ' + (record.fileName || record.id));
+      const blob = await response.blob();
+      const safeName = String(record.fileName || 'document').normalize('NFKD')
+        .replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-zA-Z0-9._-]+/g, '-').slice(-100) || 'document';
+      const path = companyId + '/' + String(record.id) + '/' + safeName;
+      const { error } = await storage.upload(path, blob, { upsert: true, contentType: blob.type || 'application/octet-stream' });
+      if (error) throw error;
+      record.storagePath = path;
+      record.storageBucket = fileBucket;
+      delete record.dataUrl;
+    }
+  }
+  async function getFileUrl(path, expiresIn = 300) {
+    if (!ready || !path || !String(path).startsWith(companyId + '/')) throw new Error('Chemin de fichier invalide ou entreprise non initialisée.');
+    const { data: signed, error } = await client().storage.from(fileBucket).createSignedUrl(path, expiresIn);
+    if (error) throw error;
+    return signed.signedUrl;
+  }
   async function listRemote() {
     const { data, error } = await client().from('ssp_app_records')
       .select('collection,record_id,payload,version,deleted_at')
@@ -101,6 +126,7 @@
     companyId = id;
     stateKey = 'ssp-sync-state-v1:' + id;
     readState();
+    await uploadPendingFiles();
     const remote = await listRemote();
     const local = rowsFromData(data);
     if (remote.length) {
@@ -124,6 +150,7 @@
     if (!ready || syncing || !navigator.onLine) return;
     syncing = true;
     try {
+      await uploadPendingFiles();
       const previous = new Map((JSON.parse(lastSnapshot || '[]')).map(row => [stateKeyFor(row.collection,row.record_id), row]));
       const remote = await listRemote();
       const remoteByKey = new Map(remote.map(row => [stateKeyFor(row.collection,row.record_id), row]));
@@ -216,6 +243,7 @@
     initialize,
     schedule,
     flush,
+    getFileUrl,
     isReady: () => ready,
     status: () => ({ ready, syncing, companyId })
   });
