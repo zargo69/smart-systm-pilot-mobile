@@ -7,11 +7,7 @@ Ces fichiers préparent la connexion du navigateur au projet Supabase.
 
 ## État
 
-Cette intégration est volontairement **non activée** dans l'application à ce stade :
-- aucun script n'est encore ajouté à `index.html`;
-- l'authentification locale existante reste inchangée;
-- les données continuent d'être enregistrées dans le navigateur;
-- aucune migration ni synchronisation automatique n'est lancée.
+L'authentification Supabase est chargée par `index.html` sur cette branche. La connexion et la récupération du mot de passe sont gérées par `auth-supabase.js`. En revanche, les données métier continuent d'être enregistrées dans le navigateur : aucune synchronisation distante ni migration automatique n'est encore activée.
 
 ## Sécurité
 
