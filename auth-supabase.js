@@ -185,8 +185,23 @@ async function openApp(user) {
     return;
   }
 
+  let company;
   try {
-    const company = await loadOrCreateCompany(user);
+    company = await loadOrCreateCompany(user);
+  } catch (error) {
+    console.error('[SSP] Impossible de vérifier le rattachement entreprise :', error);
+    currentAccount = null;
+    document.querySelector('.app-shell').hidden = true;
+    document.querySelector('.mobile-nav').hidden = true;
+
+    const gateMessage = /SSP_COMPANY_ALREADY_EXISTS/.test(error?.message || '')
+      ? 'Ce compte n’est pas encore rattaché à l’entreprise. Demandez au responsable de vous inviter.'
+      : 'Impossible de vérifier votre espace entreprise pour le moment. Vérifiez la connexion puis réessayez.';
+    renderGate(gateMessage);
+    return;
+  }
+
+  try {
     window.SSPCompanyStorage?.activate(company.companyId);
     let syncError = '';
     if (window.SSP_SUPABASE_CONFIG?.syncEnabled === true && navigator.onLine) {
@@ -224,20 +239,13 @@ async function openApp(user) {
     if (syncError) window.dispatchEvent(new CustomEvent('ssp-sync-status', { detail: { status: 'error', message: syncError } }));
 
   } catch (error) {
-    console.error('[SSP] Erreur de rattachement entreprise :', error);
+    console.error('[SSP] Erreur pendant l’ouverture de l’espace :', error);
     currentAccount = null;
-
     document.querySelector('.app-shell').hidden = true;
     document.querySelector('.mobile-nav').hidden = true;
-
-    const gateMessage = /SSP_COMPANY_ALREADY_EXISTS/.test(error?.message || '')
-      ? 'Ce compte n’est pas encore rattaché à l’entreprise. Demandez au responsable de vous inviter.'
-      : 'Impossible de récupérer votre entreprise. Vérifiez la connexion et réessayez.';
-    renderGate(gateMessage);
+    renderGate('Votre compte est reconnu, mais l’espace de travail n’a pas pu s’ouvrir. Réessayez ou contactez le responsable.');
   }
 }
-
-
 
 
   function updateProfile() {
