@@ -762,3 +762,73 @@ html, body, .main-area {
 .auth-form input:focus, .account-form input:focus, .account-form select:focus { border-color: #8290e8; }
 .auth-link, .password-toggle { color: #4557bd; }
 .password-toggle:hover { background: #f0f1ff; }
+
+
+/* Palette SMART SYST’M : bleu nuit et turquoise. */
+:root {
+  --ink: #172c3a;
+  --muted: #5d727d;
+  --line: #dce7e5;
+  --paper: #f4f8f7;
+  --teal: #0b918b;
+  --teal-dark: #075d65;
+  --brand-blue: #0b918b;
+  --brand-blue-dark: #075d65;
+  --brand-lavender: #e5f3f0;
+  --brand-lime: #d7f0eb;
+  --focus-ring: 0 0 0 3px rgba(11, 145, 139, .22);
+  --shadow: 0 10px 28px rgba(20, 48, 57, .07);
+  --shadow-soft: 0 2px 9px rgba(20, 48, 57, .04);
+}
+html, body, .main-area { background: var(--paper); }
+:focus-visible { outline: 3px solid #0b918b; outline-offset: 2px; }
+.sidebar { background: linear-gradient(155deg, #142b38 0%, #173d49 58%, #075d65 100%); }
+.brand-mark { background: linear-gradient(145deg, #16a39a, #087a7e); }
+.company .avatar { color: #075d65; background: #d7f0eb; }
+.nav-link.active { background: linear-gradient(110deg, rgba(11,145,139,.48), rgba(7,93,101,.58)); }
+.nav-link.active i { color: #a6eee5; }
+.nav-count { color: #07565f; background: #b9eae3; }
+.help-icon { color: #075d65; background: #d7f0eb; }
+.help-card button { color: #a6eee5; }
+.top-avatar { color: #075d65; background: #d7f0eb; }
+.page-heading .eyebrow { color: #075d65; background: #dff1ed; }
+.status-dot { background: #0b918b; }
+.metric-card:nth-child(3n + 2) {
+  background: radial-gradient(ellipse at 100% 0%, rgba(190,235,227,.42), transparent 45%), #fff;
+}
+.metric-symbol, .doc-icon, .client-avatar {
+  color: #087c78; background: linear-gradient(145deg, #e8f6f3, #d9efea);
+}
+.metric-card:nth-child(3n + 2) .metric-symbol { color: #075d65; background: #d7f0eb; }
+.metric-card > a, .client-card-foot button, .text-link, .panel-footer-link { color: #087c78; }
+.progress-track i { background: linear-gradient(90deg, #0b918b, #45c3b5); }
+.btn.primary {
+  background: linear-gradient(135deg, #139d94 0%, #087c78 58%, #075d65 100%);
+  box-shadow: 0 5px 14px rgba(8,124,120,.2), inset 0 1px 0 rgba(255,255,255,.16);
+}
+.btn.primary:hover { background: linear-gradient(135deg, #1aa99f, #075d65); }
+.btn.secondary:hover { color: #075d65; background: #edf7f5; border-color: #b7dcd5; }
+.planning-day.is-today { background: linear-gradient(160deg, #e8f6f3, #fff); }
+.planning-day.is-today .planning-day-head b { background: linear-gradient(145deg, #139d94, #087c78); }
+.planning-event { background: linear-gradient(100deg, #e8f6f3, #f8fcfb); border-color: #d2ebe5; border-left-color: #0b918b; }
+.quote-summary { background: linear-gradient(135deg, #edf7f5, #fbfdfc); border-color: #d7ece7; }
+.notice { color: #24565a; background: linear-gradient(105deg, #e8f6f3, #fbfdfc); border-color: #d2ebe5; }
+.notice-icon { color: #087c78; background: #d7f0eb; }
+.mobile-menu { color: #075d65; background: #e3f3f0; }
+.mobile-nav > a.active { color: #087c78; }
+.mobile-nav > a.active i { background: #e3f3f0; }
+.mobile-nav > button { color: #087c78; }
+.mobile-nav > button span { background: linear-gradient(145deg, #139d94, #087c78); box-shadow: 0 4px 12px rgba(8,124,120,.22); }
+.auth-screen {
+  background: radial-gradient(ellipse at 16% 12%, rgba(203,237,230,.68), transparent 40%),
+    radial-gradient(ellipse at 88% 88%, rgba(215,240,235,.55), transparent 34%), #f4f8f7;
+}
+.auth-brand .brand-mark { background: linear-gradient(145deg, #139d94, #075d65); }
+.auth-form input:focus, .account-form input:focus, .account-form select:focus { border-color: #58bdb2; }
+.auth-link, .password-toggle { color: #087c78; }
+.password-toggle:hover { background: #e8f6f3; }
+
+@media (prefers-contrast: more) {
+  :root { --muted: #405965; --line: #b6c9c7; }
+  .subheading, .panel-head p, .section-title p, .metric-note { color: #405965; }
+}
