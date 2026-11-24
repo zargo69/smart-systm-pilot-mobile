@@ -36,9 +36,27 @@
         rows.push({ collection, record_id: String(record.id), payload: record });
       }
     }
+    if (source?.settings && typeof source.settings === 'object') {
+      rows.push({ collection: 'settings', record_id: 'company-settings', payload: source.settings });
+    }
     return rows;
   }
   function stateKeyFor(collection, id) { return collection + ':' + id; }
+  function applyRemoteRow(row) {
+    if (row.collection === 'settings') {
+      const defaults = typeof localModulesDefault !== 'undefined' ? localModulesDefault.settings : {};
+      data.settings = { ...defaults, ...(row.payload || {}) };
+      return;
+    }
+    if (!Array.isArray(data[row.collection])) data[row.collection] = [];
+    const index = data[row.collection].findIndex(item => String(item.id) === row.record_id);
+    if (index >= 0) data[row.collection][index] = row.payload;
+    else data[row.collection].push(row.payload);
+  }
+  function resetForRemoteCompany() {
+    if (typeof localModulesDefault === 'undefined') throw new Error('Configuration locale absente.');
+    data = JSON.parse(JSON.stringify(localModulesDefault));
+  }
   const fileBucket = 'ssp-company-files';
   async function uploadPendingFiles() {
     const pending = (data.documents || []).filter(record => record?.dataUrl && !record.storagePath);
@@ -95,8 +113,7 @@
       versions[key] = Number(row.version);
       if (row.deleted_at) continue;
       if (!localByKey.has(key)) {
-        if (!Array.isArray(data[row.collection])) data[row.collection] = [];
-        data[row.collection].push(row.payload);
+        applyRemoteRow(row);
       }
     }
     writeState();
@@ -122,19 +139,39 @@
     }
     writeState();
   }
-  async function initialize(id) {
+  async function initialize(id, role = 'member') {
     if (!client() || !id) throw new Error('Client Supabase ou entreprise manquant.');
     companyId = id;
     stateKey = 'ssp-sync-state-v1:' + id;
+    const firstSyncOnThisDevice = localStorage.getItem(stateKey) === null;
     readState();
-    await uploadPendingFiles();
     const remote = await listRemote();
     const local = rowsFromData(data);
-    if (remote.length) {
+    if (!remote.length && role !== 'admin') {
+      throw new Error('Le responsable doit d’abord synchroniser les données de l’entreprise.');
+    }
+    const joiningMemberForFirstTime = remote.length > 0 && role !== 'admin' && firstSyncOnThisDevice;
+    if (joiningMemberForFirstTime) {
+      // Les anciennes données propres à l’appareil ne sont jamais ajoutées en silence à l’entreprise.
+      if (local.length) {
+        try { localStorage.setItem('ssp-pre-team-sync-backup-v1:' + id, JSON.stringify(data)); }
+        catch { throw new Error('Libérez de l’espace ou exportez vos données locales avant de rejoindre l’entreprise.'); }
+      }
+      resetForRemoteCompany();
+      for (const row of remote) {
+        const key = stateKeyFor(row.collection, row.record_id);
+        versions[key] = Number(row.version);
+        if (!row.deleted_at) applyRemoteRow(row);
+      }
+      writeState();
+    } else if (remote.length) {
       mergeRemote(remote);
-      // Les fiches locales absentes du serveur sont ajoutées sans toucher aux fiches existantes.
+    }
+    await uploadPendingFiles();
+    if (!joiningMemberForFirstTime && remote.length) {
+      // Les données locales du responsable sont ajoutées sans écraser les fiches distantes.
       await uploadLocalRows(remote);
-    } else if (local.length) {
+    } else if (!remote.length && local.length) {
       await uploadLocalRows(remote);
     }
     if (typeof save === 'function' && save({ restoring: true }) === false) {
@@ -164,6 +201,7 @@
         const localRow = currentBeforePull.get(key);
         const priorRow = previous.get(key);
         if (remoteRow.deleted_at) {
+          if (remoteRow.collection === 'settings') { conflicts.push('réglages de l’entreprise supprimés à distance'); continue; }
           if (localRow && (!priorRow || JSON.stringify(localRow.payload) !== JSON.stringify(priorRow.payload))) {
             conflicts.push(key + ' (fiche locale et suppression distante)');
           } else if (localRow) {
@@ -181,13 +219,7 @@
           conflicts.push(key + ' (identifiant local déjà utilisé à distance)');
           continue;
         }
-        if (localRow) {
-          const index = data[remoteRow.collection].findIndex(item => String(item.id) === remoteRow.record_id);
-          if (index >= 0) data[remoteRow.collection][index] = remoteRow.payload;
-        } else {
-          if (!Array.isArray(data[remoteRow.collection])) data[remoteRow.collection] = [];
-          data[remoteRow.collection].push(remoteRow.payload);
-        }
+        applyRemoteRow(remoteRow);
         versions[key] = Number(remoteRow.version);
       }
       if (conflicts.length) throw new Error('SSP_CONFLICT: ' + conflicts.slice(0, 8).join(', '));
