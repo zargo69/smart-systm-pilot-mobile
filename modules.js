@@ -12,7 +12,7 @@ const starterPricebook = [
 ];
 const localModulesDefault = {
   appointments: [], suppliers: [], purchases: [], invoices: [], payments: [],
-  expenses: [], documents: [], reports: [], auditLogs: [], prospects: [], followups: [], pricebook: starterPricebook,
+  expenses: [], documents: [], reports: [], auditLogs: [], prospects: [], opportunities: [], followups: [], pricebook: starterPricebook,
   settings: { appName: 'Smart syst’m Pilot', companyName: 'Mon entreprise', country: 'FR', currency: 'EUR', addressSearchEndpoint: 'https://nominatim.openstreetmap.org/search' }
 };
 data = { ...localModulesDefault, ...data, settings: { ...localModulesDefault.settings, ...(data.settings || {}) } };
@@ -1323,12 +1323,33 @@ document.addEventListener('change', async event => {
 
 let crmView = 'clients';
 let pendingCrmDraft = null;
+const opportunityStages = ['Nouveau','À contacter','Contact établi','Besoin identifié','Rendez-vous','Devis envoyé','Négociation','Gagné','Perdu'];
+function openOpportunityForm() {
+  const contacts = [...(data.clients || []).map(x => ({...x, kind:'client'})), ...(data.prospects || []).filter(x => !x.convertedAt).map(x => ({...x, kind:'prospect'}))];
+  const options = contacts.map(x => '<option value="'+x.kind+':'+esc(x.id)+'">'+esc(x.name)+' · '+(x.kind === 'client' ? 'Client' : 'Prospect')+'</option>').join('');
+  if (!options) return notify('Ajoutez d’abord un client ou un prospect.');
+  modal('Nouvelle opportunité', '<form data-crm-form="opportunity"><label>Objet de l’affaire<input name="title" required maxlength="160"></label><label>Entreprise ou prospect<select name="contact" required>'+options+'</select></label><div class="form-row"><label>Étape<select name="stage">'+opportunityStages.map(x => '<option>'+esc(x)+'</option>').join('')+'</select></label><label>Montant estimé HT (€)<input name="amountHT" type="number" min="0" step="0.01"></label></div><label>Prochaine relance<input name="nextFollowup" type="date"></label><label>Note<textarea name="notes" maxlength="1000"></textarea></label><div class="form-actions"><button type="button" class="btn secondary cancel">Annuler</button><button class="btn primary">Créer l’opportunité</button></div></form>');
+  $('.cancel').onclick = closeModal;
+}
+function pipelinePage() {
+  const all = data.opportunities || [];
+  const cols = opportunityStages.map(stage => {
+    const items = all.filter(x => x.stage === stage);
+    return '<section class="pipeline-column"><header><b>'+esc(stage)+'</b><span class="pill neutral">'+items.length+'</span></header>'+items.map(item => {
+      const contact = item.contactType === 'prospect' ? (data.prospects || []).find(x => x.id === item.contactId) : (data.clients || []).find(x => x.id === item.contactId);
+      return '<article class="panel pipeline-card"><b>'+esc(item.title)+'</b><small>'+esc(contact?.name || 'Fiche liée introuvable')+'</small>'+(item.amountHT ? '<strong>'+money(item.amountHT)+' HT</strong>' : '')+(item.nextFollowup ? '<small>Relance : '+esc(item.nextFollowup)+'</small>' : '')+'<select aria-label="Étape de '+esc(item.title)+'" data-opportunity-stage="'+esc(item.id)+'">'+opportunityStages.map(x => '<option '+(x === stage ? 'selected' : '')+'>'+esc(x)+'</option>').join('')+'</select></article>';
+    }).join('')+(items.length ? '' : '<p class="pipeline-empty">Aucune affaire</p>')+'</section>';
+  }).join('');
+  const total = all.filter(x => !['Gagné','Perdu'].includes(x.stage)).reduce((sum,x) => sum + (Number(x.amountHT) || 0),0);
+  return heading('DÉVELOPPEMENT COMMERCIAL','Pipeline des opportunités','Suivez chaque affaire jusqu’à sa conclusion.','<button class="btn primary" data-crm-action="new-opportunity">＋ Nouvelle opportunité</button>')+'<div class="pipeline-summary panel"><span>'+all.length+' affaire(s)</span><b>'+money(total)+' HT en cours</b></div><div class="pipeline-board">'+cols+'</div>';
+}
 
 function clientsPage() {
   const clients = data.clients || [];
   const prospects = data.prospects || [];
   const openFollowups = (data.followups || []).filter(item => item.status !== 'Fait').sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
-  const tabs = `<div class="crm-tabs" role="tablist" aria-label="Contacts"><button role="tab" aria-selected="${crmView === 'clients'}" class="${crmView === 'clients' ? 'active' : ''}" data-crm-view="clients">Clients <span>${clients.length}</span></button><button role="tab" aria-selected="${crmView === 'prospects'}" class="${crmView === 'prospects' ? 'active' : ''}" data-crm-view="prospects">Prospects <span>${prospects.filter(x => !x.convertedAt && x.status !== 'Perdu').length}</span></button></div>`;
+  const tabs = `<div class="crm-tabs" role="tablist" aria-label="Contacts"><button role="tab" aria-selected="${crmView === 'clients'}" class="${crmView === 'clients' ? 'active' : ''}" data-crm-view="clients">Clients <span>${clients.length}</span></button><button role="tab" aria-selected="${crmView === 'prospects'}" class="${crmView === 'prospects' ? 'active' : ''}" data-crm-view="prospects">Prospects <span>${prospects.filter(x => !x.convertedAt && x.status !== 'Perdu').length}</span></button><button role="tab" aria-selected="${crmView === 'pipeline'}" class="${crmView === 'pipeline' ? 'active' : ''}" data-crm-view="pipeline">Opportunités <span>${(data.opportunities || []).filter(x => !['Gagné','Perdu'].includes(x.stage)).length}</span></button></div>`;
+  if (crmView === 'pipeline') return pipelinePage();
   if (crmView === 'prospects') {
     const rows = prospects.map(prospect => {
       const next = openFollowups.find(item => item.entityType === 'prospect' && item.entityId === prospect.id);
@@ -1446,6 +1467,14 @@ document.addEventListener('submit', event => {
     const matches = crmContactMatches(candidate);
     return matches.length ? showDuplicateReview({ kind: 'prospect', candidate }, matches) : persistProspect(candidate);
   }
+  if (crmForm.dataset.crmForm === 'opportunity') {
+    const parts = String(values.contact || '').split(':'); const amount = values.amountHT === '' ? null : Number(values.amountHT); const title = String(values.title || '').trim();
+    if (!title || !['client','prospect'].includes(parts[0]) || !parts[1] || (amount !== null && (!Number.isFinite(amount) || amount < 0))) return notify('Vérifiez le nom, le contact et le montant.');
+    const record = { id:newId(), title, contactType:parts[0], contactId:parts[1], stage:opportunityStages.includes(values.stage) ? values.stage : 'Nouveau', amountHT:amount, nextFollowup:values.nextFollowup || '', notes:String(values.notes || '').trim(), createdAt:new Date().toISOString() };
+    data.opportunities.unshift(record);
+    if (record.nextFollowup) data.followups.unshift({ id:newId(), entityType:'opportunity', entityId:record.id, title:'Relancer '+record.title, dueDate:record.nextFollowup, note:record.notes, status:'À faire' });
+    if (!save()) return; crmView='pipeline'; closeModal(); render(); notify('Opportunité enregistrée.'); return;
+  }
   if (crmForm.dataset.crmForm === 'followup') {
     const prospect = data.prospects.find(item => item.id === crmForm.dataset.prospectId);
     if (!prospect) return notify('Ce prospect n’existe plus.');
@@ -1455,6 +1484,16 @@ document.addEventListener('submit', event => {
     closeModal(); render(); notify('Relance planifiée localement.');
   }
 }, true);
+
+document.addEventListener('change', event => {
+  const select = event.target.closest('[data-opportunity-stage]'); if (!select) return;
+  const item = (data.opportunities || []).find(x => x.id === select.dataset.opportunityStage); if (!item || !opportunityStages.includes(select.value)) return;
+  const old = item.stage; item.stage = select.value; if (!save()) { item.stage = old; return; } render(); notify('Étape de l’opportunité mise à jour.');
+});
+
+document.addEventListener('click', event => {
+  if (event.target.closest('[data-crm-action="new-opportunity"]')) { openOpportunityForm(); return; }
+});
 
 document.addEventListener('input', event => {
   if (event.target.id === 'prospect-search') {
