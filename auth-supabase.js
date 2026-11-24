@@ -181,8 +181,13 @@ async function openApp(user) {
   try {
     const company = await loadOrCreateCompany(user);
     window.SSPCompanyStorage?.activate(company.companyId);
+    let syncError = '';
     if (window.SSP_SUPABASE_CONFIG?.syncEnabled === true && navigator.onLine) {
-      await window.SSPSync.initialize(company.companyId, company.role);
+      try { await window.SSPSync.initialize(company.companyId, company.role); }
+      catch (error) {
+        syncError = error?.message || 'Connexion au stockage distant impossible.';
+        console.error('[SSP] Synchronisation indisponible; espace local conservé :', error);
+      }
     }
 
     const displayName =
@@ -209,6 +214,7 @@ async function openApp(user) {
     updateProfile();
     scheduleIdleCheck();
     route(page || 'accueil');
+    if (syncError) window.dispatchEvent(new CustomEvent('ssp-sync-status', { detail: { status: 'error', message: syncError } }));
 
   } catch (error) {
     console.error('[SSP] Erreur de rattachement entreprise :', error);
@@ -217,9 +223,10 @@ async function openApp(user) {
     document.querySelector('.app-shell').hidden = true;
     document.querySelector('.mobile-nav').hidden = true;
 
-    renderGate(
-      'Impossible de récupérer votre entreprise. Vérifiez la connexion et réessayez.'
-    );
+    const gateMessage = /SSP_COMPANY_ALREADY_EXISTS/.test(error?.message || '')
+      ? 'Ce compte n’est pas encore rattaché à l’entreprise. Demandez au responsable de vous inviter.'
+      : 'Impossible de récupérer votre entreprise. Vérifiez la connexion et réessayez.';
+    renderGate(gateMessage);
   }
 }
 
