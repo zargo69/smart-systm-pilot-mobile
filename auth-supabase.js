@@ -204,7 +204,7 @@ async function openApp(user) {
   try {
     window.SSPCompanyStorage?.activate(company.companyId);
     let syncError = '';
-    if (window.SSP_SUPABASE_CONFIG?.syncEnabled === true && navigator.onLine) {
+    if (window.SSP_SUPABASE_CONFIG?.syncEnabled === true) {
       try { await window.SSPSync.initialize(company.companyId, company.role); }
       catch (error) {
         syncError = error?.message || 'Connexion au stockage distant impossible.';
