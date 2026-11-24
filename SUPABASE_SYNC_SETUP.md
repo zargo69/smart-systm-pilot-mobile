@@ -8,7 +8,7 @@ La synchronisation reste désactivée dans supabase-config.js (syncEnabled: fals
 ## Mise en service
 1. Faire une copie des données du responsable.
 2. Appliquer les migrations 001_business_records.sql, 002_private_company_files.sql puis 003_company_admin_access.sql dans cet ordre.
-3. Déployer la fonction Edge supabase/functions/ssp-company-admin/index.ts. La clé de service reste dans les secrets Supabase; ne jamais la copier dans le navigateur ou le dépôt.
+3. Configurer dans Supabase l’URL de retour des invitations et l’autoriser dans les redirections Auth, puis déployer la fonction Edge supabase/functions/ssp-company-admin/index.ts. La clé de service reste dans les secrets Supabase; ne jamais la copier dans le navigateur ou le dépôt.
 4. Vérifier avec deux comptes de la même entreprise que les dossiers sont visibles et modifiables par les deux, que seul le responsable peut modifier les réglages, inviter ou retirer un membre.
 5. Vérifier qu’un membre d’une autre entreprise ne peut ni lire ni modifier les dossiers.
 6. Après ces vérifications, activer syncEnabled dans supabase-config.js et publier la version validée.
