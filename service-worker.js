@@ -1,5 +1,5 @@
-const CACHE = 'smart-systm-pilot-shell-v60';
-const SHELL = ['./', './index.html', './styles.css', './ui-fixes.css', './design-system.css', './domain.js', './app.js', './modules.js', './quotes.js', './operations.js', './supabase-config.js', './supabase-client.js', './supabase-sync.js', './auth-supabase.js', './service-worker.js', './manifest.webmanifest', './icon.svg', './favicon-32.png', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
+const CACHE = 'smart-systm-pilot-shell-v61';
+const SHELL = ['./', './index.html', './styles.css', './ui-fixes.css', './design-system.css', './domain.js', './app.js', './modules.js', './company-storage.js', './quotes.js', './operations.js', './supabase-config.js', './supabase-client.js', './supabase-sync.js', './auth-supabase.js', './service-worker.js', './manifest.webmanifest', './icon.svg', './favicon-32.png', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
