@@ -1,4 +1,3 @@
-
 name: Test preview
 
 on:
@@ -10,15 +9,26 @@ on:
 jobs:
   preview-check:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout development branch
         uses: actions/checkout@v4
 
-      - name: Verify application files
+      - name: Check required application files
         run: |
           test -f index.html
           test -f auth-supabase.js
           test -f supabase-client.js
           test -f supabase-config.js
-          echo "SMART SYST'M preview files verified."
+          test -f service-worker.js
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check domain.js
+          node --check app.js
+          node --check modules.js
+          node --check quotes.js
+          node --check operations.js
+          node --check supabase-config.js
+          node --check supabase-client.js
+          node --check auth-supabase.js
+          node --check service-worker.js
