@@ -64,6 +64,19 @@ test('imports remote records into a first-time member device', async () => {
   assert.ok(h.local.has('ssp-sync-state-v1:co-a'));
 });
 
+test('owner on a new device adopts existing shared records and settings', async () => {
+  const remote = [
+    { company_id: 'co-a', collection: 'clients', record_id: 'c-1', payload: { id: 'c-1', name: 'Client partagé' }, version: 1, deleted_at: null },
+    { company_id: 'co-a', collection: 'settings', record_id: 'company-settings', payload: { companyName: 'Smart Syst’m', currency: 'EUR' }, version: 1, deleted_at: null }
+  ];
+  const h = harness({ remote });
+  await h.api.initialize('co-a', 'admin');
+  assert.equal(h.context.data.clients[0].name, 'Client partagé');
+  assert.equal(h.context.data.settings.companyName, 'Smart Syst’m');
+  assert.equal(h.rows.length, 2);
+  assert.ok(h.local.has('ssp-pre-owner-sync-backup-v1:co-a'));
+});
+
 test('uploads local records when the owner initializes an empty company', async () => {
   const h = harness({ initialData: { ...structuredClone(defaults), clients: [{ id: 'c-1', name: 'Client local' }] } });
   await h.api.initialize('co-a', 'admin');
